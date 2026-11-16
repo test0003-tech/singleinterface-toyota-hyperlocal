@@ -18,6 +18,7 @@ export interface ReminderAlert {
     | 'live_campaign'
     | 'media_renewal'
     | 'custom_rule'
+    | 'campaign_blocked'
   title: string
   message: string
   count?: number
@@ -321,6 +322,70 @@ export async function GET() {
         } a media budget for ${nextMon} (next month). Reminder triggered on the 25th — add the budget to avoid campaign interruption.`,
         count: liveLocationsNeedingRenewal,
         locations: locationsNeedingRenewal.slice(0, 20),
+      })
+    }
+
+    // --- Campaign blocked (platform fee unpaid from 2nd month onwards) ---
+    // Rule: First month is free if location went live with < 10 days remaining.
+    // From the second month onwards, platform fee must be paid to run campaigns.
+    // If fee is unpaid for a live location in its 2nd+ month, campaigns are blocked.
+    const now = new Date()
+    const campaignBlockedLocations: { code: string; type: string; name?: string | null; detail?: string }[] = []
+
+    // Fetch live SI records with their liveSince dates
+    const liveSIWithDates = await db.sIRecord.findMany({
+      where: { isLive: true, liveSince: { not: null } },
+      select: {
+        siCode: true,
+        businessName: true,
+        liveSince: true,
+      },
+    })
+
+    for (const si of liveSIWithDates) {
+      if (!si.liveSince) continue
+      const liveDate = new Date(si.liveSince)
+      const monthsSinceLive =
+        (now.getFullYear() - liveDate.getFullYear()) * 12 +
+        (now.getMonth() - liveDate.getMonth())
+
+      // monthsSinceLive === 0 is the first month
+      // monthsSinceLive >= 1 means it's the second month or later
+      if (monthsSinceLive >= 1) {
+        // Check if current month's platform fee exists and is paid
+        const currentFee = platformFeesMonth.find(
+          (f) => f.recordType === 'SI' && f.recordCode === si.siCode
+        )
+        if (!currentFee || currentFee.paymentStatus !== 'paid') {
+          const daysOverdue = currentFee?.dueDate
+            ? Math.max(
+                0,
+                Math.floor(
+                  (now.getTime() - new Date(currentFee.dueDate).getTime()) /
+                    (1000 * 60 * 60 * 24)
+                )
+              )
+            : 0
+          campaignBlockedLocations.push({
+            code: si.siCode,
+            type: 'SI',
+            name: si.businessName,
+            detail: daysOverdue > 0 ? `fee overdue ${daysOverdue} days` : 'fee not paid',
+          })
+        }
+      }
+    }
+
+    if (campaignBlockedLocations.length > 0) {
+      alerts.push({
+        severity: 'critical',
+        category: 'campaign_blocked',
+        title: 'Campaigns Blocked — Platform Fee Unpaid',
+        message: `${campaignBlockedLocations.length} live location${
+          campaignBlockedLocations.length > 1 ? 's have' : ' has'
+        } an unpaid platform fee for ${month}. From the second month onwards, campaigns cannot run without the platform fee being paid. Record payment in the Platform Fees tab to unblock.`,
+        count: campaignBlockedLocations.length,
+        locations: campaignBlockedLocations.slice(0, 20),
       })
     }
 

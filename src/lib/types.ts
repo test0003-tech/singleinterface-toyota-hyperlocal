@@ -289,7 +289,8 @@ export interface ReminderAlert {
     | 'media_deficit'
     | 'live_campaign'
     | 'media_renewal'
-    | 'custom_rule';
+    | 'custom_rule'
+    | 'campaign_blocked';
   title: string;
   message: string;
   count?: number;

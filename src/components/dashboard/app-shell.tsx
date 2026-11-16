@@ -34,6 +34,7 @@ import {
   BarChart3,
   ClipboardCheck,
   History,
+  Link2,
 } from 'lucide-react'
 import { Overview } from '@/components/dashboard/overview'
 import { SIDataTable } from '@/components/dashboard/si-data-table'
@@ -48,10 +49,11 @@ import { PaymentsPage } from '@/components/dashboard/payments-page'
 import { FinancialReportsPage } from '@/components/dashboard/financial-reports-page'
 import { DataQualityPage } from '@/components/dashboard/data-quality-page'
 import { AuditLogPage } from '@/components/dashboard/audit-log-page'
+import { LocationMappingPage } from '@/components/dashboard/location-mapping-page'
 import { useToast } from '@/hooks/use-toast'
 import { formatMonth } from '@/lib/validation'
 
-type PageId = 'overview' | 'si' | 'spotlight' | 'media-spend' | 'platform-fees' | 'payments' | 'alerts' | 'rules' | 'financial-reports' | 'data-quality' | 'audit-log'
+type PageId = 'overview' | 'si' | 'spotlight' | 'media-spend' | 'platform-fees' | 'payments' | 'alerts' | 'rules' | 'financial-reports' | 'data-quality' | 'audit-log' | 'location-mapping'
 
 interface NavItem {
   id: PageId
@@ -92,6 +94,12 @@ const NAV_GROUPS: { label: string; items: NavItem[] }[] = [
         label: 'Spotlight',
         icon: <MapPin className="h-4 w-4" />,
         description: 'Spotlight location records',
+      },
+      {
+        id: 'location-mapping',
+        label: 'Location Mapping',
+        icon: <Link2 className="h-4 w-4" />,
+        description: 'SI ↔ Spotlight record mapping & auto-matching',
       },
     ],
   },
@@ -314,6 +322,7 @@ export function AppShell() {
             )}
             {page === 'si' && <SIDataTable onRefresh={handleRefresh} />}
             {page === 'spotlight' && <SpotlightDataTable onRefresh={handleRefresh} />}
+            {page === 'location-mapping' && <LocationMappingPage />}
             {page === 'media-spend' && <MediaSpendTab refreshKey={refreshKey} />}
             {page === 'platform-fees' && <PlatformFeesTab refreshKey={refreshKey} />}
             {page === 'payments' && <PaymentsPage refreshKey={refreshKey} />}
