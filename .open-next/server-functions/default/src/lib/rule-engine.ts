@@ -192,24 +192,30 @@ async function fetchItemsForRule(rule: Rule): Promise<EvalItem[]> {
         recordType: true,
         recordCode: true,
         totalAmount: true,
-        isPaid: true,
+        paymentStatus: true,
+        amountPaid: true,
+        dueDate: true,
         baseAmount: true,
         month: true,
         createdAt: true,
       },
     })
     for (const r of records) {
-      // For days_overdue, compute days since creation
-      const daysOverdue = r.isPaid
+      // For days_overdue, compute days since due date (or creation if no due date)
+      const isPaid = r.paymentStatus === 'paid'
+      const refDate = r.dueDate ?? r.createdAt
+      const daysOverdue = isPaid
         ? 0
-        : Math.floor((Date.now() - r.createdAt.getTime()) / (1000 * 60 * 60 * 24))
+        : Math.floor((Date.now() - refDate.getTime()) / (1000 * 60 * 60 * 24))
       items.push({
         code: r.recordCode,
         type: r.recordType,
         name: null,
         fields: {
           totalAmount: r.totalAmount,
-          isPaid: r.isPaid,
+          isPaid,
+          paymentStatus: r.paymentStatus,
+          amountPaid: r.amountPaid,
           baseAmount: r.baseAmount,
           month: r.month,
           daysOverdue,
@@ -336,7 +342,7 @@ export async function seedDefaultRules(): Promise<void> {
     },
     {
       name: 'Platform fee unpaid over 15 days',
-      description: 'Warning when a platform fee has been unpaid for more than 15 days',
+      description: 'Warning when a platform fee has been unpaid for more than 15 days past due date',
       targetType: 'PlatformFee',
       field: 'isPaid',
       operator: 'days_overdue',
@@ -347,12 +353,23 @@ export async function seedDefaultRules(): Promise<void> {
     },
     {
       name: 'Platform fee unpaid over 30 days',
-      description: 'Critical alert when a platform fee has been unpaid for more than 30 days',
+      description: 'Critical alert when a platform fee has been unpaid for more than 30 days past due date',
       targetType: 'PlatformFee',
       field: 'isPaid',
       operator: 'days_overdue',
       value: '30',
       severity: 'critical',
+      scopeMonth: true,
+      isEnabled: true,
+    },
+    {
+      name: 'Platform fee partially paid',
+      description: 'Alert when a platform fee has been partially paid (payment status is partial)',
+      targetType: 'PlatformFee',
+      field: 'paymentStatus',
+      operator: 'equals',
+      value: 'partial',
+      severity: 'warning',
       scopeMonth: true,
       isEnabled: true,
     },

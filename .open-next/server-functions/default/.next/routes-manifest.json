@@ -30,6 +30,14 @@
       "namedRegex": "^/api/media\\-spend/(?<nxtPid>[^/]+?)(?:/)?$"
     },
     {
+      "page": "/api/payments/[id]",
+      "regex": "^/api/payments/([^/]+?)(?:/)?$",
+      "routeKeys": {
+        "nxtPid": "nxtPid"
+      },
+      "namedRegex": "^/api/payments/(?<nxtPid>[^/]+?)(?:/)?$"
+    },
+    {
       "page": "/api/platform-fees/[id]",
       "regex": "^/api/platform\\-fees/([^/]+?)(?:/)?$",
       "routeKeys": {
@@ -126,6 +134,12 @@
       "regex": "^/api/media\\-spend/import(?:/)?$",
       "routeKeys": {},
       "namedRegex": "^/api/media\\-spend/import(?:/)?$"
+    },
+    {
+      "page": "/api/payments",
+      "regex": "^/api/payments(?:/)?$",
+      "routeKeys": {},
+      "namedRegex": "^/api/payments(?:/)?$"
     },
     {
       "page": "/api/platform-fees",

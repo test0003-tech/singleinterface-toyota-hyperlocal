@@ -105,7 +105,9 @@ export async function GET() {
           recordType: true,
           recordCode: true,
           totalAmount: true,
-          isPaid: true,
+          paymentStatus: true,
+          amountPaid: true,
+          dueDate: true,
           paidAt: true,
         },
       }),
@@ -150,13 +152,13 @@ export async function GET() {
 
     const platformTotalBilled = platformFeesMonth.reduce((s, f) => s + f.totalAmount, 0)
     const platformTotalPaid = platformFeesMonth
-      .filter((f) => f.isPaid)
+      .filter((f) => f.paymentStatus === 'paid')
       .reduce((s, f) => s + f.totalAmount, 0)
     const platformTotalPending = platformTotalBilled - platformTotalPaid
-    const platformPendingCount = platformFeesMonth.filter((f) => !f.isPaid).length
+    const platformPendingCount = platformFeesMonth.filter((f) => f.paymentStatus !== 'paid').length
 
     const platformPendingLocations = platformFeesMonth
-      .filter((f) => !f.isPaid)
+      .filter((f) => f.paymentStatus !== 'paid')
       .map((f) => ({
         code: f.recordCode,
         type: f.recordType,

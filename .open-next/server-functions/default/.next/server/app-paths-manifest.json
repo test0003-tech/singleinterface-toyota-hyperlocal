@@ -6,6 +6,8 @@
   "/api/media-spend/[id]/route": "app/api/media-spend/[id]/route.js",
   "/api/media-spend/import/route": "app/api/media-spend/import/route.js",
   "/api/media-spend/route": "app/api/media-spend/route.js",
+  "/api/payments/[id]/route": "app/api/payments/[id]/route.js",
+  "/api/payments/route": "app/api/payments/route.js",
   "/api/platform-fees/[id]/route": "app/api/platform-fees/[id]/route.js",
   "/api/platform-fees/generate/route": "app/api/platform-fees/generate/route.js",
   "/api/platform-fees/import/route": "app/api/platform-fees/import/route.js",

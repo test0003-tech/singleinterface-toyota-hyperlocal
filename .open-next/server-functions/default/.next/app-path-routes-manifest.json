@@ -6,6 +6,8 @@
   "/api/media-spend/[id]/route": "/api/media-spend/[id]",
   "/api/media-spend/import/route": "/api/media-spend/import",
   "/api/media-spend/route": "/api/media-spend",
+  "/api/payments/[id]/route": "/api/payments/[id]",
+  "/api/payments/route": "/api/payments",
   "/api/platform-fees/[id]/route": "/api/platform-fees/[id]",
   "/api/platform-fees/generate/route": "/api/platform-fees/generate",
   "/api/platform-fees/import/route": "/api/platform-fees/import",

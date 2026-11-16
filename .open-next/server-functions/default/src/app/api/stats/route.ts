@@ -16,7 +16,7 @@ export async function GET() {
           select: { month: true, allocated: true, utilized: true, pendingInWallet: true },
         }),
         db.platformFee.findMany({
-          select: { month: true, totalAmount: true, isPaid: true },
+          select: { month: true, totalAmount: true, paymentStatus: true, amountPaid: true },
         }),
       ])
 
@@ -81,7 +81,7 @@ export async function GET() {
       pfTotalBilled += p.totalAmount
       const cur = pfByMonth.get(p.month) ?? { billed: 0, paid: 0 }
       cur.billed += p.totalAmount
-      if (p.isPaid) {
+      if (p.paymentStatus === 'paid') {
         pfTotalPaid += p.totalAmount
         cur.paid += p.totalAmount
         pfPaidCount++

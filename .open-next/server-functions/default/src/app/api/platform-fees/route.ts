@@ -4,6 +4,7 @@ import type {
   PlatformFeeInput,
   PaginatedResponse,
   PlatformFee,
+  PlatformFeeWithPayments,
   RecordType,
 } from '@/lib/types'
 import { currentMonth } from '@/lib/validation'
@@ -13,29 +14,41 @@ function parseNum(v: unknown, def = 0): number {
   return Number.isFinite(n) ? n : def
 }
 
+function cleanStr(v: unknown): string | null {
+  if (v === null || v === undefined) return null
+  const s = String(v).trim()
+  return s === '' ? null : s
+}
+
 function buildInput(body: Partial<PlatformFeeInput>): {
   recordType: RecordType
   recordCode: string
   month: string
+  invoiceNumber: string | null
   baseAmount: number
   gstRate: number
-  isPaid: boolean
-  paidAt: Date | null
+  lateFee: number
+  dueDate: Date | null
   notes: string | null
 } {
   const baseAmount = body.baseAmount !== undefined ? parseNum(body.baseAmount, 8060) : 8060
   const gstRate = body.gstRate !== undefined ? parseNum(body.gstRate, 18) : 18
-  const isPaid =
-    body.isPaid === true ||
-    (typeof body.isPaid === 'string' && body.isPaid === 'paid')
+  const lateFee = body.lateFee !== undefined ? parseNum(body.lateFee, 0) : 0
+  const dueDateStr = cleanStr(body.dueDate)
+  let dueDate: Date | null = null
+  if (dueDateStr) {
+    const d = new Date(dueDateStr)
+    if (!isNaN(d.getTime())) dueDate = d
+  }
   return {
     recordType: (body.recordType as RecordType) ?? 'SI',
     recordCode: (body.recordCode ?? '').trim(),
     month: (body.month ?? currentMonth()).trim(),
+    invoiceNumber: cleanStr(body.invoiceNumber),
     baseAmount,
     gstRate,
-    isPaid,
-    paidAt: isPaid ? new Date() : null,
+    lateFee,
+    dueDate,
     notes: body.notes ? String(body.notes).trim() : null,
   }
 }
@@ -58,13 +71,16 @@ export async function GET(req: NextRequest) {
     const month = (searchParams.get('month') ?? '').trim()
     const recordType = (searchParams.get('recordType') ?? '').trim()
     const recordCode = (searchParams.get('recordCode') ?? '').trim()
-    const isPaidParam = searchParams.get('isPaid')
+    const paymentStatus = (searchParams.get('paymentStatus') ?? '').trim()
+    const overdue = searchParams.get('overdue') === '1'
+    const withPayments = searchParams.get('withPayments') === '1'
     const exportCsv = searchParams.get('export') === '1'
 
     const where: Record<string, unknown> = {}
     if (search) {
       where.OR = [
         { recordCode: { contains: search } },
+        { invoiceNumber: { contains: search } },
         { notes: { contains: search } },
       ]
     }
@@ -72,13 +88,25 @@ export async function GET(req: NextRequest) {
     if (recordType === 'SI' || recordType === 'Spotlight')
       where.recordType = recordType
     if (recordCode) where.recordCode = recordCode
-    if (isPaidParam === 'true') where.isPaid = true
-    if (isPaidParam === 'false') where.isPaid = false
+    if (paymentStatus === 'unpaid' || paymentStatus === 'partial' || paymentStatus === 'paid') {
+      where.paymentStatus = paymentStatus
+    }
+    if (overdue) {
+      where.AND = [
+        { paymentStatus: { not: 'paid' } },
+        { dueDate: { lt: new Date() } },
+      ]
+    }
+
+    const include = withPayments
+      ? { payments: { orderBy: { paidDate: 'desc' } as const } }
+      : undefined
 
     if (exportCsv) {
       const all = await db.platformFee.findMany({
         where,
         orderBy: [{ month: 'desc' }, { recordType: 'asc' }, { recordCode: 'asc' }],
+        include,
       })
       return NextResponse.json({ data: all })
     }
@@ -90,11 +118,12 @@ export async function GET(req: NextRequest) {
         orderBy: [{ month: 'desc' }, { recordType: 'asc' }, { recordCode: 'asc' }],
         skip: (page - 1) * pageSize,
         take: pageSize,
+        include,
       }),
     ])
 
-    const res: PaginatedResponse<PlatformFee> = {
-      data: data as unknown as PlatformFee[],
+    const res: PaginatedResponse<PlatformFeeWithPayments | PlatformFee> = {
+      data: data as never,
       total,
       page,
       pageSize,
@@ -152,13 +181,15 @@ export async function POST(req: NextRequest) {
         recordType: input.recordType,
         recordCode: input.recordCode,
         month: input.month,
+        invoiceNumber: input.invoiceNumber,
         baseAmount: input.baseAmount,
         gstRate: input.gstRate,
         gstAmount,
         totalAmount,
-        isPaid: input.isPaid,
-        paidAt: input.paidAt,
+        lateFee: input.lateFee,
+        dueDate: input.dueDate,
         notes: input.notes,
+        // paymentStatus defaults to "unpaid", amountPaid to 0
       },
     })
     return NextResponse.json(created, { status: 201 })

@@ -9,11 +9,15 @@ import type {
   MediaSpendInput,
   PlatformFee,
   PlatformFeeInput,
+  PlatformFeeWithPayments,
   RemindersData,
   ImportResult,
   Rule,
   RuleInput,
   RuleEvaluationResult,
+  Payment,
+  PaymentInput,
+  PaymentMethod,
 } from './types'
 
 async function jsonFetch<T>(url: string, init?: RequestInit): Promise<T> {
@@ -269,12 +273,14 @@ export interface PlatformFeeListParams {
   month?: string
   recordType?: 'SI' | 'Spotlight'
   recordCode?: string
-  isPaid?: boolean
+  paymentStatus?: 'unpaid' | 'partial' | 'paid'
+  overdue?: boolean
+  withPayments?: boolean
 }
 
 export function listPlatformFees(
   params: PlatformFeeListParams
-): Promise<PaginatedResponse<PlatformFee>> {
+): Promise<PaginatedResponse<PlatformFeeWithPayments | PlatformFee>> {
   const q = new URLSearchParams()
   if (params.page) q.set('page', String(params.page))
   if (params.pageSize) q.set('pageSize', String(params.pageSize))
@@ -282,8 +288,10 @@ export function listPlatformFees(
   if (params.month) q.set('month', params.month)
   if (params.recordType) q.set('recordType', params.recordType)
   if (params.recordCode) q.set('recordCode', params.recordCode)
-  if (params.isPaid !== undefined) q.set('isPaid', String(params.isPaid))
-  return jsonFetch<PaginatedResponse<PlatformFee>>(`/api/platform-fees?${q.toString()}`)
+  if (params.paymentStatus) q.set('paymentStatus', params.paymentStatus)
+  if (params.overdue) q.set('overdue', '1')
+  if (params.withPayments) q.set('withPayments', '1')
+  return jsonFetch<PaginatedResponse<PlatformFeeWithPayments | PlatformFee>>(`/api/platform-fees?${q.toString()}`)
 }
 
 export function exportPlatformFees(params: Omit<PlatformFeeListParams, 'page' | 'pageSize'>) {
@@ -292,7 +300,8 @@ export function exportPlatformFees(params: Omit<PlatformFeeListParams, 'page' | 
   if (params.month) q.set('month', params.month)
   if (params.recordType) q.set('recordType', params.recordType)
   if (params.recordCode) q.set('recordCode', params.recordCode)
-  if (params.isPaid !== undefined) q.set('isPaid', String(params.isPaid))
+  if (params.paymentStatus) q.set('paymentStatus', params.paymentStatus)
+  if (params.overdue) q.set('overdue', '1')
   return jsonFetch<{ data: PlatformFee[] }>(`/api/platform-fees?${q.toString()}`)
 }
 
@@ -426,4 +435,43 @@ export interface EvaluateResult {
 
 export function evaluateRules() {
   return jsonFetch<EvaluateResult>(`/api/rules/evaluate`)
+}
+
+// --- Payments ---
+export interface PaymentListParams {
+  page?: number
+  pageSize?: number
+  platformFeeId?: string
+  method?: PaymentMethod
+  startDate?: string
+  endDate?: string
+}
+
+export function listPayments(params: PaymentListParams) {
+  const q = new URLSearchParams()
+  if (params.page) q.set('page', String(params.page))
+  if (params.pageSize) q.set('pageSize', String(params.pageSize))
+  if (params.platformFeeId) q.set('platformFeeId', params.platformFeeId)
+  if (params.method) q.set('method', params.method)
+  if (params.startDate) q.set('startDate', params.startDate)
+  if (params.endDate) q.set('endDate', params.endDate)
+  return jsonFetch<PaginatedResponse<Payment & {
+    platformFee?: { recordType: string; recordCode: string; month: string; invoiceNumber: string | null; totalAmount: number }
+  }>>(`/api/payments?${q.toString()}`)
+}
+
+export function recordPayment(data: PaymentInput) {
+  return jsonFetch<Payment>(`/api/payments`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(data),
+  })
+}
+
+export function deletePayment(id: string) {
+  return jsonFetch<{ success: boolean }>(`/api/payments/${id}`, { method: 'DELETE' })
+}
+
+export function getPlatformFeeWithPayments(id: string) {
+  return jsonFetch<PlatformFeeWithPayments>(`/api/platform-fees/${id}`)
 }

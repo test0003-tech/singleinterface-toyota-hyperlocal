@@ -213,7 +213,8 @@ export async function POST(req: NextRequest) {
           gstRate: row.gstRate,
           gstAmount,
           totalAmount,
-          isPaid: row.isPaid,
+          paymentStatus: row.isPaid ? 'paid' : 'unpaid',
+          amountPaid: row.isPaid ? totalAmount : 0,
           paidAt: row.isPaid ? new Date() : null,
           notes: row.notes,
         }
