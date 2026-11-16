@@ -39,7 +39,7 @@ export async function GET(req: NextRequest) {
     }
 
     for (const fee of fees) {
-      const outstanding = fee.totalAmount + (fee.lateFee || 0) - fee.amountPaid
+      const outstanding = (fee.totalAmount || 0) + (fee.lateFee || 0) - (fee.amountPaid || 0)
       if (outstanding <= 0) {
         agingBuckets.current.count++
         continue
@@ -48,8 +48,12 @@ export async function GET(req: NextRequest) {
         agingBuckets.current.count++
         continue
       }
+      // Handle both Date objects and ISO strings (D1 adapter may return strings)
+      const dueMs = typeof fee.dueDate === 'string'
+        ? new Date(fee.dueDate).getTime()
+        : (fee.dueDate as Date).getTime()
       const daysOverdue = Math.floor(
-        (now.getTime() - fee.dueDate.getTime()) / (1000 * 60 * 60 * 24)
+        (now.getTime() - dueMs) / (1000 * 60 * 60 * 24)
       )
       if (daysOverdue <= 0) {
         agingBuckets.current.count++
@@ -79,9 +83,9 @@ export async function GET(req: NextRequest) {
     const avgDaysToPay =
       paidFees.length > 0
         ? paidFees.reduce((s, f) => {
-            const days = Math.floor(
-              (f.paidAt!.getTime() - f.createdAt.getTime()) / (1000 * 60 * 60 * 24)
-            )
+            const paidMs = typeof f.paidAt === 'string' ? new Date(f.paidAt as string).getTime() : (f.paidAt as Date).getTime()
+            const createdMs = typeof f.createdAt === 'string' ? new Date(f.createdAt as string).getTime() : (f.createdAt as Date).getTime()
+            const days = Math.floor((paidMs - createdMs) / (1000 * 60 * 60 * 24))
             return s + days
           }, 0) / paidFees.length
         : 0
@@ -167,6 +171,7 @@ export async function GET(req: NextRequest) {
     })
   } catch (e) {
     console.error('Financial reports error', e)
-    return NextResponse.json({ error: 'Failed to fetch financial reports' }, { status: 500 })
+    const msg = e instanceof Error ? e.message : String(e)
+    return NextResponse.json({ error: 'Failed to fetch financial reports', detail: msg }, { status: 500 })
   }
 }
