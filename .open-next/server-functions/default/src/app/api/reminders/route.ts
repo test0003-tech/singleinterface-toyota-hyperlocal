@@ -1,10 +1,21 @@
 import { NextResponse } from 'next/server'
 import { db } from '@/lib/db'
-import { currentMonth } from '@/lib/validation'
+import {
+  currentMonth,
+  nextMonth,
+  isRenewalReminderDay,
+  currentDayOfMonth,
+} from '@/lib/validation'
 
 export interface ReminderAlert {
   severity: 'critical' | 'warning' | 'info'
-  category: 'missing_platform_fee' | 'missing_media_spend' | 'pending_payment' | 'media_deficit' | 'live_campaign'
+  category:
+    | 'missing_platform_fee'
+    | 'missing_media_spend'
+    | 'pending_payment'
+    | 'media_deficit'
+    | 'live_campaign'
+    | 'media_renewal'
   title: string
   message: string
   count?: number
@@ -47,6 +58,13 @@ export interface RemindersData {
       name?: string | null
     }[]
   }
+  mediaRenewal: {
+    isReminderDay: boolean // true if today is on/after the 25th
+    dayOfMonth: number
+    nextMonth: string
+    liveLocationsNeedingRenewal: number // live locations without next month's budget
+    locationsNeedingRenewal: { code: string; type: string; name?: string | null }[]
+  }
   alerts: ReminderAlert[]
 }
 
@@ -75,8 +93,9 @@ export async function GET() {
     const liveSICodes = siRecords.map((r) => r.siCode)
     const liveSpotlightCodes = spotlightRecords.map((r) => r.clientCode)
 
-    // Fetch platform fees and media spend for current month
-    const [platformFeesMonth, mediaSpendMonth] = await Promise.all([
+    // Fetch platform fees and media spend for current month + next month (for renewal)
+    const nextMon = nextMonth(month)
+    const [platformFeesMonth, mediaSpendMonth, mediaSpendNextMonth] = await Promise.all([
       db.platformFee.findMany({
         where: { month },
         select: {
@@ -97,6 +116,14 @@ export async function GET() {
           allocated: true,
           utilized: true,
           pendingInWallet: true,
+        },
+      }),
+      db.mediaSpend.findMany({
+        where: { month: nextMon },
+        select: {
+          recordType: true,
+          recordCode: true,
+          allocated: true,
         },
       }),
     ])
@@ -264,6 +291,35 @@ export async function GET() {
       })
     }
 
+    // --- Media budget renewal reminder ---
+    // On/after the 25th of each month, remind to renew media budget for next month.
+    // If a live location already has a media spend entry for next month, no reminder.
+    const isReminderDay = isRenewalReminderDay()
+    const dayOfMonth = currentDayOfMonth()
+
+    // Build set of locations that HAVE next month's media budget
+    const nextMonthHasBudget = new Set(
+      mediaSpendNextMonth.map((m) => `${m.recordType}:${m.recordCode}`)
+    )
+    // Live locations missing next month's budget
+    const locationsNeedingRenewal = allLiveLocations.filter(
+      (l) => !nextMonthHasBudget.has(`${l.type}:${l.code}`)
+    )
+    const liveLocationsNeedingRenewal = locationsNeedingRenewal.length
+
+    if (isReminderDay && liveLocationsNeedingRenewal > 0) {
+      alerts.push({
+        severity: 'warning',
+        category: 'media_renewal',
+        title: 'Media Budget Renewal Due',
+        message: `${liveLocationsNeedingRenewal} live location${
+          liveLocationsNeedingRenewal > 1 ? 's need' : ' needs'
+        } a media budget for ${nextMon} (next month). Reminder triggered on the 25th — add the budget to avoid campaign interruption.`,
+        count: liveLocationsNeedingRenewal,
+        locations: locationsNeedingRenewal.slice(0, 20),
+      })
+    }
+
     const data: RemindersData = {
       month,
       liveCampaigns: {
@@ -291,6 +347,13 @@ export async function GET() {
         deficitCount: mediaDeficitCount,
         missingLocations: mediaMissingLocations,
         deficitLocations: mediaDeficitLocations,
+      },
+      mediaRenewal: {
+        isReminderDay,
+        dayOfMonth,
+        nextMonth: nextMon,
+        liveLocationsNeedingRenewal,
+        locationsNeedingRenewal,
       },
       alerts,
     }

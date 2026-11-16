@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { db } from '@/lib/db'
 import * as XLSX from 'xlsx'
-import { currentMonth } from '@/lib/validation'
+import { currentMonth, previousMonth, calculatePendingInWallet } from '@/lib/validation'
 import type { RecordType } from '@/lib/types'
 
 interface ImportRow {
@@ -170,7 +170,15 @@ export async function POST(req: NextRequest) {
       await db.mediaSpend.deleteMany({})
     }
 
-    for (const row of rows) {
+    // Sort rows by month ascending so earlier months are processed first.
+    // This ensures the previous month's pendingInWallet is available when
+    // calculating the current month's pendingInWallet.
+    const sortedRows = [...rows].sort((a, b) => a.month.localeCompare(b.month))
+
+    // Track pendingInWallet per location+month for in-batch lookups
+    const pendingCache = new Map<string, number>()
+
+    for (const row of sortedRows) {
       const rt = row.recordType as RecordType
       if (rt !== 'SI' && rt !== 'Spotlight') {
         result.skipped++
@@ -181,6 +189,48 @@ export async function POST(req: NextRequest) {
         continue
       }
       try {
+        const cacheKey = `${rt}:${row.recordCode}:${row.month}`
+        const prevMonthStr = previousMonth(row.month)
+        const prevCacheKey = `${rt}:${row.recordCode}:${prevMonthStr}`
+
+        // Look up previous month's pendingInWallet: first from the in-batch
+        // cache, then from the database.
+        let prevPending = pendingCache.get(prevCacheKey)
+        if (prevPending === undefined) {
+          const prevEntry = await db.mediaSpend.findUnique({
+            where: {
+              recordType_recordCode_month: {
+                recordType: rt,
+                recordCode: row.recordCode,
+                month: prevMonthStr,
+              },
+            },
+            select: { pendingInWallet: true },
+          })
+          prevPending = prevEntry?.pendingInWallet ?? 0
+        }
+
+        const allocated = row.allocated
+        const utilized = row.utilized
+        // Auto-calculate: pendingInWallet = allocated + prevPending - utilized
+        const pendingInWallet = calculatePendingInWallet(
+          allocated,
+          utilized,
+          prevPending
+        )
+
+        // Store in cache for subsequent months in this batch
+        pendingCache.set(cacheKey, pendingInWallet)
+
+        const data = {
+          recordType: rt,
+          recordCode: row.recordCode,
+          month: row.month,
+          allocated,
+          utilized,
+          pendingInWallet,
+          notes: row.notes,
+        }
         const existing = await db.mediaSpend.findUnique({
           where: {
             recordType_recordCode_month: {
@@ -190,15 +240,6 @@ export async function POST(req: NextRequest) {
             },
           },
         })
-        const data = {
-          recordType: rt,
-          recordCode: row.recordCode,
-          month: row.month,
-          allocated: row.allocated,
-          utilized: row.utilized,
-          pendingInWallet: row.pendingInWallet,
-          notes: row.notes,
-        }
         if (existing && mode === 'upsert') {
           await db.mediaSpend.update({
             where: { id: existing.id },
@@ -208,14 +249,9 @@ export async function POST(req: NextRequest) {
         } else if (!existing) {
           await db.mediaSpend.create({ data })
           result.inserted++
-        } else {
-          // existing in upsert mode but we already updated; if replace mode, create
-          if (mode === 'replace') {
-            await db.mediaSpend.create({ data })
-            result.inserted++
-          } else {
-            result.updated++ // already counted
-          }
+        } else if (mode === 'replace') {
+          await db.mediaSpend.create({ data })
+          result.inserted++
         }
       } catch (e) {
         result.errors.push(
