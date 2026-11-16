@@ -23,6 +23,7 @@ import {
   TrendingDown,
   Clock,
   XCircle,
+  CalendarClock,
 } from 'lucide-react'
 import { getReminders } from '@/lib/api'
 import type { RemindersData, ReminderAlert } from '@/lib/types'
@@ -127,7 +128,7 @@ export function RemindersWidget({ refreshKey }: { refreshKey: number }) {
       </CardHeader>
       <CardContent className="space-y-3">
         {/* Live campaigns summary */}
-        <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3">
           <StatusTile
             label="Live SI"
             value={data.liveCampaigns.si.live}
@@ -155,6 +156,17 @@ export function RemindersWidget({ refreshKey }: { refreshKey: number }) {
             suffix={`/ ${data.mediaSpend.liveLocations}`}
             icon={<Wallet className="h-4 w-4" />}
             tone={data.mediaSpend.withoutEntry > 0 ? 'destructive' : 'muted'}
+          />
+          <StatusTile
+            label="Renewal Due"
+            value={data.mediaRenewal.isReminderDay ? data.mediaRenewal.liveLocationsNeedingRenewal : 0}
+            suffix={data.mediaRenewal.isReminderDay ? `for ${formatMonth(data.mediaRenewal.nextMonth)}` : 'after 25th'}
+            icon={<CalendarClock className="h-4 w-4" />}
+            tone={
+              data.mediaRenewal.isReminderDay && data.mediaRenewal.liveLocationsNeedingRenewal > 0
+                ? 'destructive'
+                : 'muted'
+            }
           />
         </div>
 

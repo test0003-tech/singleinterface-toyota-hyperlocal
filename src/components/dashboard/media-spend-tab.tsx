@@ -749,7 +749,10 @@ function MediaSpendForm({
               />
             </div>
             <div className="space-y-1.5">
-              <Label htmlFor="pending" className="text-xs font-medium">Pending in Wallet</Label>
+              <Label htmlFor="pending" className="text-xs font-medium">
+                Pending in Wallet{' '}
+                <span className="text-muted-foreground font-normal">(auto)</span>
+              </Label>
               <Input
                 id="pending"
                 type="number"
@@ -757,7 +760,12 @@ function MediaSpendForm({
                 value={pendingInWallet}
                 onChange={(e) => setPendingInWallet(e.target.value)}
                 placeholder="0"
+                disabled
+                className="bg-muted/50"
               />
+              <p className="text-[10px] text-muted-foreground">
+                = Allocated + Prev. pending − Utilized
+              </p>
             </div>
           </div>
           <div className="space-y-1.5">

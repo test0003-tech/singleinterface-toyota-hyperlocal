@@ -6,7 +6,7 @@ import type {
   MediaSpend,
   RecordType,
 } from '@/lib/types'
-import { currentMonth } from '@/lib/validation'
+import { currentMonth, previousMonth, calculatePendingInWallet } from '@/lib/validation'
 
 function parseNum(v: unknown, def = 0): number {
   const n = typeof v === 'string' ? parseFloat(v) : typeof v === 'number' ? v : NaN
@@ -119,14 +119,30 @@ export async function POST(req: NextRequest) {
         { status: 409 }
       )
     }
+    // Auto-calculate pendingInWallet = allocated + previousMonth.pendingInWallet - utilized
+    const prevMonth = previousMonth(input.month)
+    const prevEntry = await db.mediaSpend.findUnique({
+      where: {
+        recordType_recordCode_month: {
+          recordType: input.recordType,
+          recordCode: input.recordCode,
+          month: prevMonth,
+        },
+      },
+      select: { pendingInWallet: true },
+    })
+    const prevPending = prevEntry?.pendingInWallet ?? 0
+    const allocated = input.allocated ?? 0
+    const utilized = input.utilized ?? 0
+    const pendingInWallet = calculatePendingInWallet(allocated, utilized, prevPending)
     const created = await db.mediaSpend.create({
       data: {
         recordType: input.recordType,
         recordCode: input.recordCode,
         month: input.month,
-        allocated: input.allocated ?? 0,
-        utilized: input.utilized ?? 0,
-        pendingInWallet: input.pendingInWallet ?? 0,
+        allocated,
+        utilized,
+        pendingInWallet,
         notes: input.notes ?? null,
       },
     })

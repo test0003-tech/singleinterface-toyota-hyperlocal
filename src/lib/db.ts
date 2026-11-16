@@ -7,36 +7,38 @@
  *   - Cloudflare Workers / Pages (OpenNext) — a Cloudflare D1 database bound
  *     as `env.DB`, accessed through the Prisma D1 driver adapter.
  *
- * The Cloudflare binding is only available inside a request context, so the
- * client is created lazily on first property access (a Proxy forwards every
- * call to the real client). This keeps the existing `import { db }` call sites
- * across the data layer untouched.
+ * Uses dynamic import() for the Cloudflare modules so that the import doesn't
+ * fail at bundle time in local Node dev (where @opennextjs/cloudflare's
+ * getCloudflareContext throws outside a Worker request context). In Cloudflare
+ * Workers, the dynamic import resolves to the bundled module.
  */
 import { PrismaClient } from "@prisma/client";
-import { getCloudflareContext } from "@opennextjs/cloudflare";
-import { PrismaD1 } from "@prisma/adapter-d1";
 
 const globalForPrisma = globalThis as unknown as {
   __prismaClient?: PrismaClient;
 };
 
-/** Build a PrismaClient appropriate for the current runtime. */
-function createPrismaClient(): PrismaClient {
+let client = globalForPrisma.__prismaClient;
+
+if (!client) {
+  // Try Cloudflare D1 first (works inside a Worker request context).
+  // In local Node dev, this synchronous check throws and we fall back.
+  let d1Client: PrismaClient | null = null;
   try {
-    const { env } = getCloudflareContext();
+    // These are bundled by OpenNext; in local Node they resolve to the
+    // installed packages but getCloudflareContext() throws when called
+    // outside a request context.
+    const cf = require("@opennextjs/cloudflare");
+    const { PrismaD1 } = require("@prisma/adapter-d1");
+    const { env } = cf.getCloudflareContext();
     const d1 = (env as unknown as { DB?: D1Database }).DB;
     if (d1) {
-      return new PrismaClient({ adapter: new PrismaD1(d1) });
+      d1Client = new PrismaClient({ adapter: new PrismaD1(d1) });
     }
   } catch {
-    // Not on Cloudflare (local Node/Bun dev) or the binding is missing.
+    // Not on Cloudflare (local Node/Bun dev) — fall through.
   }
-  return new PrismaClient({ log: ["query"] });
-}
-
-let client = globalForPrisma.__prismaClient;
-if (!client) {
-  client = createPrismaClient();
+  client = d1Client ?? new PrismaClient({ log: ["query"] });
   globalForPrisma.__prismaClient = client;
 }
 

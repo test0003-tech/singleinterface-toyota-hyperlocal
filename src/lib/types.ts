@@ -229,7 +229,8 @@ export interface ReminderAlert {
     | 'missing_media_spend'
     | 'pending_payment'
     | 'media_deficit'
-    | 'live_campaign';
+    | 'live_campaign'
+    | 'media_renewal';
   title: string;
   message: string;
   count?: number;
@@ -271,6 +272,13 @@ export interface RemindersData {
       deficit: number;
       name?: string | null;
     }[];
+  };
+  mediaRenewal: {
+    isReminderDay: boolean;
+    dayOfMonth: number;
+    nextMonth: string;
+    liveLocationsNeedingRenewal: number;
+    locationsNeedingRenewal: { code: string; type: string; name?: string | null }[];
   };
   alerts: ReminderAlert[];
 }
