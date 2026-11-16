@@ -9,6 +9,8 @@ import type {
   MediaSpendInput,
   PlatformFee,
   PlatformFeeInput,
+  RemindersData,
+  ImportResult,
 } from './types'
 
 async function jsonFetch<T>(url: string, init?: RequestInit): Promise<T> {
@@ -138,13 +140,13 @@ export function deleteSpotlight(id: string) {
   return jsonFetch<{ success: boolean }>(`/api/spotlight/${id}`, { method: 'DELETE' })
 }
 
-export interface ImportResult {
+export interface ExcelImportResult {
   si: { inserted: number; updated: number; skipped: number; errors: string[] }
   spotlight: { inserted: number; updated: number; skipped: number; errors: string[] }
 }
 
 export function importExcel(mode: 'replace' | 'upsert' = 'upsert') {
-  return jsonFetch<ImportResult>(`/api/import`, {
+  return jsonFetch<ExcelImportResult>(`/api/import`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ mode }),
@@ -329,5 +331,57 @@ export function generatePlatformFees(
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ month, recordType }),
+  })
+}
+
+// --- Reminders ---
+export function getReminders() {
+  return jsonFetch<RemindersData>(`/api/reminders`)
+}
+
+// --- Media Spend Import ---
+export function importMediaSpendFile(file: File, mode: 'upsert' | 'replace' = 'upsert') {
+  const fd = new FormData()
+  fd.append('file', file)
+  fd.append('mode', mode)
+  return jsonFetch<ImportResult>(`/api/media-spend/import`, {
+    method: 'POST',
+    body: fd,
+  })
+}
+
+export function importMediaSpendJson(
+  rows: Record<string, unknown>[],
+  mode: 'upsert' | 'replace' = 'upsert'
+) {
+  return jsonFetch<ImportResult>(`/api/media-spend/import`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ rows, mode }),
+  })
+}
+
+// --- Platform Fees Import ---
+export function importPlatformFeesFile(
+  file: File,
+  mode: 'upsert' | 'replace' = 'upsert'
+) {
+  const fd = new FormData()
+  fd.append('file', file)
+  fd.append('mode', mode)
+  return jsonFetch<ImportResult>(`/api/platform-fees/import`, {
+    method: 'POST',
+    body: fd,
+  })
+}
+
+export function importPlatformFeesJson(
+  rows: Record<string, unknown>[],
+  mode: 'upsert' | 'replace' = 'upsert'
+) {
+  return jsonFetch<ImportResult>(`/api/platform-fees/import`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ rows, mode }),
   })
 }

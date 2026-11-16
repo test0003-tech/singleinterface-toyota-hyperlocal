@@ -221,3 +221,63 @@ export interface FinanceSummary {
     byMonth: { month: string; billed: number; paid: number }[];
   };
 }
+
+export interface ReminderAlert {
+  severity: 'critical' | 'warning' | 'info';
+  category:
+    | 'missing_platform_fee'
+    | 'missing_media_spend'
+    | 'pending_payment'
+    | 'media_deficit'
+    | 'live_campaign';
+  title: string;
+  message: string;
+  count?: number;
+  amount?: number;
+  locations?: { code: string; type: string; name?: string | null }[];
+}
+
+export interface RemindersData {
+  month: string;
+  liveCampaigns: {
+    si: { total: number; live: number };
+    spotlight: { total: number; live: number };
+  };
+  platformFees: {
+    required: number;
+    present: number;
+    missing: number;
+    totalBilled: number;
+    totalPaid: number;
+    totalPending: number;
+    pendingCount: number;
+    missingLocations: { code: string; type: string; name?: string | null }[];
+    pendingLocations: { code: string; type: string; amount: number; name?: string | null }[];
+  };
+  mediaSpend: {
+    liveLocations: number;
+    withEntry: number;
+    withoutEntry: number;
+    totalAllocated: number;
+    totalUtilized: number;
+    totalPendingWallet: number;
+    deficitCount: number;
+    missingLocations: { code: string; type: string; name?: string | null }[];
+    deficitLocations: {
+      code: string;
+      type: string;
+      allocated: number;
+      utilized: number;
+      deficit: number;
+      name?: string | null;
+    }[];
+  };
+  alerts: ReminderAlert[];
+}
+
+export interface ImportResult {
+  inserted: number;
+  updated: number;
+  skipped: number;
+  errors: string[];
+}
