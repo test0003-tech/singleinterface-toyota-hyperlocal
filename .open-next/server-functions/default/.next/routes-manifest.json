@@ -114,6 +114,12 @@
       "namedRegex": "^/api/media\\-spend(?:/)?$"
     },
     {
+      "page": "/api/media-spend/import",
+      "regex": "^/api/media\\-spend/import(?:/)?$",
+      "routeKeys": {},
+      "namedRegex": "^/api/media\\-spend/import(?:/)?$"
+    },
+    {
       "page": "/api/platform-fees",
       "regex": "^/api/platform\\-fees(?:/)?$",
       "routeKeys": {},
@@ -124,6 +130,18 @@
       "regex": "^/api/platform\\-fees/generate(?:/)?$",
       "routeKeys": {},
       "namedRegex": "^/api/platform\\-fees/generate(?:/)?$"
+    },
+    {
+      "page": "/api/platform-fees/import",
+      "regex": "^/api/platform\\-fees/import(?:/)?$",
+      "routeKeys": {},
+      "namedRegex": "^/api/platform\\-fees/import(?:/)?$"
+    },
+    {
+      "page": "/api/reminders",
+      "regex": "^/api/reminders(?:/)?$",
+      "routeKeys": {},
+      "namedRegex": "^/api/reminders(?:/)?$"
     },
     {
       "page": "/api/si",

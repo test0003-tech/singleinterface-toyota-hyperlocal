@@ -67,6 +67,7 @@ import {
   CheckCircle2,
   Clock,
   Sparkles,
+  Upload,
 } from 'lucide-react'
 import { useToast } from '@/hooks/use-toast'
 import {
@@ -76,6 +77,7 @@ import {
   deletePlatformFee,
   exportPlatformFees,
   generatePlatformFees,
+  importPlatformFeesFile,
   getStats,
 } from '@/lib/api'
 import type { PlatformFee, RecordType } from '@/lib/types'
@@ -85,6 +87,7 @@ import {
   recentMonths,
   formatCurrency,
 } from '@/lib/validation'
+import { FinanceImportDialog } from './finance-import-dialog'
 
 const PAGE_SIZE_OPTIONS = [10, 25, 50, 100]
 const DEFAULT_BASE = 8060
@@ -116,6 +119,7 @@ export function PlatformFeesTab({ refreshKey }: { refreshKey: number }) {
   const [exporting, setExporting] = useState(false)
   const [generating, setGenerating] = useState(false)
   const [generateOpen, setGenerateOpen] = useState(false)
+  const [importOpen, setImportOpen] = useState(false)
 
   const searchTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
   useEffect(() => {
@@ -310,6 +314,15 @@ export function PlatformFeesTab({ refreshKey }: { refreshKey: number }) {
           <Button variant="outline" size="sm" onClick={() => setGenerateOpen(true)}>
             <Sparkles className="mr-2 h-4 w-4" />
             Auto-Generate
+          </Button>
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => setImportOpen(true)}
+            disabled={loading}
+          >
+            <Upload className="mr-2 h-4 w-4" />
+            Import
           </Button>
           <Button
             variant="outline"
@@ -619,6 +632,28 @@ export function PlatformFeesTab({ refreshKey }: { refreshKey: number }) {
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+
+      <FinanceImportDialog
+        open={importOpen}
+        onOpenChange={setImportOpen}
+        title="Import Platform Fees"
+        description="Upload an Excel/CSV file with per-location per-month platform fees. Each row matches a location + month and will be upserted."
+        expectedColumns={[
+          'Location Type',
+          'Location Code',
+          'Month',
+          'Base Amount',
+          'GST Rate',
+          'Status',
+          'Notes',
+        ]}
+        onImportFile={importPlatformFeesFile}
+        onImported={async () => {
+          await fetchData()
+          triggerStatsRefresh()
+        }}
+        downloadTemplate={downloadPlatformFeesTemplate}
+      />
     </div>
   )
 }
@@ -1030,6 +1065,31 @@ function downloadCSV(rows: PlatformFee[], filename: string) {
   const a = document.createElement('a')
   a.href = url
   a.download = filename
+  a.click()
+  URL.revokeObjectURL(url)
+}
+
+function downloadPlatformFeesTemplate() {
+  const headers = [
+    'Location Type',
+    'Location Code',
+    'Month',
+    'Base Amount',
+    'GST Rate',
+    'Status',
+    'Notes',
+  ]
+  const sample = [
+    'SI,10001,2025-01,8060,18,unpaid,',
+    'SI,10002,2025-01,8060,18,paid,',
+    'Spotlight,PU09A,2025-01,8060,18,unpaid,',
+  ]
+  const csv = [headers.join(','), ...sample].join('\n')
+  const blob = new Blob([csv], { type: 'text/csv;charset=utf-8' })
+  const url = URL.createObjectURL(blob)
+  const a = document.createElement('a')
+  a.href = url
+  a.download = 'platform-fees-template.csv'
   a.click()
   URL.revokeObjectURL(url)
 }

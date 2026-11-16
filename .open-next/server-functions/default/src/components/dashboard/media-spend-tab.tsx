@@ -66,6 +66,7 @@ import {
   Wallet,
   TrendingDown,
   PiggyBank,
+  Upload,
 } from 'lucide-react'
 import { useToast } from '@/hooks/use-toast'
 import {
@@ -75,9 +76,11 @@ import {
   deleteMediaSpend,
   exportMediaSpend,
   getStats,
+  importMediaSpendFile,
 } from '@/lib/api'
 import type { MediaSpend, RecordType } from '@/lib/types'
 import { currentMonth, formatMonth, recentMonths, formatCurrency } from '@/lib/validation'
+import { FinanceImportDialog } from './finance-import-dialog'
 
 const PAGE_SIZE_OPTIONS = [10, 25, 50, 100]
 
@@ -102,6 +105,7 @@ export function MediaSpendTab({ refreshKey }: { refreshKey: number }) {
   const [deleteTarget, setDeleteTarget] = useState<MediaSpend | null>(null)
   const [deleting, setDeleting] = useState(false)
   const [exporting, setExporting] = useState(false)
+  const [importOpen, setImportOpen] = useState(false)
 
   const searchTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
   useEffect(() => {
@@ -270,6 +274,15 @@ export function MediaSpendTab({ refreshKey }: { refreshKey: number }) {
           </p>
         </div>
         <div className="flex flex-wrap items-center gap-2">
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => setImportOpen(true)}
+            disabled={loading}
+          >
+            <Upload className="mr-2 h-4 w-4" />
+            Import
+          </Button>
           <Button
             variant="outline"
             size="sm"
@@ -539,6 +552,28 @@ export function MediaSpendTab({ refreshKey }: { refreshKey: number }) {
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+
+      <FinanceImportDialog
+        open={importOpen}
+        onOpenChange={setImportOpen}
+        title="Import Media Spend"
+        description="Upload an Excel/CSV file with per-location per-month media budget. Each row matches a location + month and will be upserted."
+        expectedColumns={[
+          'Location Type',
+          'Location Code',
+          'Month',
+          'Allocated',
+          'Utilized',
+          'Pending in Wallet',
+          'Notes',
+        ]}
+        onImportFile={importMediaSpendFile}
+        onImported={async () => {
+          await fetchData()
+          triggerStatsRefresh()
+        }}
+        downloadTemplate={downloadMediaSpendTemplate}
+      />
     </div>
   )
 }
@@ -792,6 +827,30 @@ function downloadCSV(rows: MediaSpend[], filename: string) {
   const a = document.createElement('a')
   a.href = url
   a.download = filename
+  a.click()
+  URL.revokeObjectURL(url)
+}
+
+function downloadMediaSpendTemplate() {
+  const headers = [
+    'Location Type',
+    'Location Code',
+    'Month',
+    'Allocated',
+    'Utilized',
+    'Pending in Wallet',
+    'Notes',
+  ]
+  const sample = [
+    'SI,10001,2025-01,50000,32000,18000,Jan campaign',
+    'Spotlight,PU09A,2025-01,30000,28000,2000,',
+  ]
+  const csv = [headers.join(','), ...sample].join('\n')
+  const blob = new Blob([csv], { type: 'text/csv;charset=utf-8' })
+  const url = URL.createObjectURL(blob)
+  const a = document.createElement('a')
+  a.href = url
+  a.download = 'media-spend-template.csv'
   a.click()
   URL.revokeObjectURL(url)
 }

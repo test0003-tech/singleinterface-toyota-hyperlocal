@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Skeleton } from '@/components/ui/skeleton'
 import { Badge } from '@/components/ui/badge'
+import { RemindersWidget } from './reminders-widget'
 import {
   Building2,
   MapPin,
@@ -109,6 +110,9 @@ export function Overview({ refreshKey }: { refreshKey: number }) {
 
   return (
     <div className="space-y-6">
+      {/* Reminders & Alerts */}
+      <RemindersWidget refreshKey={refreshKey} />
+
       {/* Stat cards */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
         <StatCard

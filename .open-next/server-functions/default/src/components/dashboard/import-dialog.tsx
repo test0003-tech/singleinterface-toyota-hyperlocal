@@ -13,7 +13,7 @@ import { Button } from '@/components/ui/button'
 import { Label } from '@/components/ui/label'
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group'
 import { AlertCircle, CheckCircle2, FileSpreadsheet, Loader2, Upload } from 'lucide-react'
-import { importExcel, importExcelFile, type ImportResult } from '@/lib/api'
+import { importExcel, importExcelFile, type ExcelImportResult } from '@/lib/api'
 import { useToast } from '@/hooks/use-toast'
 
 export function ImportDialog({
@@ -28,7 +28,7 @@ export function ImportDialog({
   const { toast } = useToast()
   const [mode, setMode] = useState<'upsert' | 'replace'>('upsert')
   const [loading, setLoading] = useState(false)
-  const [result, setResult] = useState<ImportResult | null>(null)
+  const [result, setResult] = useState<ExcelImportResult | null>(null)
   const [fileName, setFileName] = useState<string | null>(null)
 
   async function handleImportDefault() {
