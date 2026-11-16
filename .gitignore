@@ -66,3 +66,4 @@ server.log
 # Cloudflare
 .wrangler/
 .dev.vars
+.open-next/
