@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { db } from '@/lib/db'
 import type { SIRecordInput } from '@/lib/types'
+import { normalizeLandingNumbers, validateLandingNumbers } from '@/lib/validation'
 
 function cleanValue(v: unknown): string | null {
   if (v === null || v === undefined) return null
@@ -33,7 +34,18 @@ function buildInput(body: Partial<SIRecordInput>): SIRecordInput {
     placeId: cleanValue(body.placeId),
     locationGroup: cleanValue(body.locationGroup),
     gmbListingStatus: cleanValue(body.gmbListingStatus),
+    salesLandingNumbers: normalizeLandingNumbers(body.salesLandingNumbers),
+    serviceLandingNumbers: normalizeLandingNumbers(body.serviceLandingNumbers),
+    linkedSpotlightCode: cleanValue(body.linkedSpotlightCode),
   }
+}
+
+function validateInput(input: SIRecordInput): string | null {
+  const e1 = validateLandingNumbers(input.salesLandingNumbers)
+  if (e1) return `Sales Landing Numbers: ${e1}`
+  const e2 = validateLandingNumbers(input.serviceLandingNumbers)
+  if (e2) return `Service Landing Numbers: ${e2}`
+  return null
 }
 
 export async function GET(
@@ -67,6 +79,10 @@ export async function PUT(
       )
     }
     const input = buildInput(body)
+    const validationError = validateInput(input)
+    if (validationError) {
+      return NextResponse.json({ error: validationError }, { status: 400 })
+    }
     const existing = await db.sIRecord.findUnique({ where: { id } })
     if (!existing) {
       return NextResponse.json({ error: 'Not found' }, { status: 404 })

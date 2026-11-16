@@ -84,6 +84,15 @@ export function RecordFormModal({
     for (const name of requiredFields) {
       if (!values[name]?.trim()) errs[name] = 'Required'
     }
+    // Run per-field validators
+    for (const f of fields) {
+      if (errs[f.name]) continue
+      const val = values[f.name] ?? ''
+      if (f.validate) {
+        const v = f.validate(val)
+        if (v) errs[f.name] = v
+      }
+    }
     if (Object.keys(errs).length) {
       setErrors(errs)
       return
@@ -158,12 +167,24 @@ export function RecordFormModal({
                     ) : (
                       <Input
                         id={f.name}
-                        type={f.type === 'url' ? 'url' : 'text'}
+                        type={
+                          f.type === 'url'
+                            ? 'url'
+                            : f.type === 'number'
+                              ? 'number'
+                              : f.type === 'date'
+                                ? 'month'
+                                : 'text'
+                        }
+                        step={f.type === 'number' ? 'any' : undefined}
                         value={values[f.name] ?? ''}
                         onChange={(e) => setValue(f.name, e.target.value)}
                         placeholder={f.placeholder}
                         className={error ? 'border-destructive' : ''}
                       />
+                    )}
+                    {f.hint && !error && (
+                      <p className="text-xs text-muted-foreground">{f.hint}</p>
                     )}
                     {error && (
                       <p className="text-xs text-destructive">{error}</p>

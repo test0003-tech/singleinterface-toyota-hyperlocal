@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { db } from '@/lib/db'
 import type { SIRecordInput, PaginatedResponse, SIRecord } from '@/lib/types'
+import { normalizeLandingNumbers, validateLandingNumbers } from '@/lib/validation'
 
 function cleanValue(v: unknown): string | null {
   if (v === null || v === undefined) return null
@@ -33,7 +34,18 @@ function buildInput(body: Partial<SIRecordInput>): SIRecordInput {
     placeId: cleanValue(body.placeId),
     locationGroup: cleanValue(body.locationGroup),
     gmbListingStatus: cleanValue(body.gmbListingStatus),
+    salesLandingNumbers: normalizeLandingNumbers(body.salesLandingNumbers),
+    serviceLandingNumbers: normalizeLandingNumbers(body.serviceLandingNumbers),
+    linkedSpotlightCode: cleanValue(body.linkedSpotlightCode),
   }
+}
+
+function validateInput(input: SIRecordInput): string | null {
+  const e1 = validateLandingNumbers(input.salesLandingNumbers)
+  if (e1) return `Sales Landing Numbers: ${e1}`
+  const e2 = validateLandingNumbers(input.serviceLandingNumbers)
+  if (e2) return `Service Landing Numbers: ${e2}`
+  return null
 }
 
 export async function GET(req: NextRequest) {
@@ -49,6 +61,7 @@ export async function GET(req: NextRequest) {
     const circle = (searchParams.get('circle') ?? '').trim()
     const city = (searchParams.get('city') ?? '').trim()
     const gmbStatus = (searchParams.get('gmbStatus') ?? '').trim()
+    const isLiveParam = searchParams.get('isLive')
     const exportCsv = searchParams.get('export') === '1'
 
     const where: Record<string, unknown> = {}
@@ -63,12 +76,17 @@ export async function GET(req: NextRequest) {
         { locality: { contains: search } },
         { postcode: { contains: search } },
         { locationGroup: { contains: search } },
+        { salesLandingNumbers: { contains: search } },
+        { serviceLandingNumbers: { contains: search } },
+        { linkedSpotlightCode: { contains: search } },
       ]
     }
     if (state) where.state = state
     if (circle) where.circle = circle
     if (city) where.city = city
     if (gmbStatus) where.gmbListingStatus = gmbStatus
+    if (isLiveParam === 'true') where.isLive = true
+    if (isLiveParam === 'false') where.isLive = false
 
     if (exportCsv) {
       const all = await db.sIRecord.findMany({
@@ -115,6 +133,10 @@ export async function POST(req: NextRequest) {
       )
     }
     const input = buildInput(body)
+    const validationError = validateInput(input)
+    if (validationError) {
+      return NextResponse.json({ error: validationError }, { status: 400 })
+    }
     const existing = await db.sIRecord.findUnique({
       where: { siCode: input.siCode },
     })

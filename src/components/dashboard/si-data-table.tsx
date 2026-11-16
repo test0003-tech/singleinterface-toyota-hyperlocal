@@ -2,7 +2,12 @@
 
 import { useCallback, useEffect, useState } from 'react'
 import { Badge } from '@/components/ui/badge'
-import { DataTable, type DataTableColumn, type FilterDef } from './data-table'
+import {
+  DataTable,
+  type DataTableColumn,
+  type FilterDef,
+  type CustomRowAction,
+} from './data-table'
 import {
   listSI,
   createSI,
@@ -10,11 +15,16 @@ import {
   deleteSI,
   exportSI,
   getFilters,
+  markSILive,
 } from '@/lib/api'
 import type { SIRecord } from '@/lib/types'
 import { SI_FIELDS } from '@/lib/fields'
+import { countLandingNumbers } from '@/lib/validation'
+import { useToast } from '@/hooks/use-toast'
+import { Power, PowerOff } from 'lucide-react'
 
 export function SIDataTable({ onRefresh }: { onRefresh?: () => void }) {
+  const { toast } = useToast()
   const [filterOptions, setFilterOptions] = useState<{
     states: string[]
     circles: string[]
@@ -42,6 +52,7 @@ export function SIDataTable({ onRefresh }: { onRefresh?: () => void }) {
       search: string
       filters: Record<string, string>
     }) => {
+      const isLiveVal = params.filters.isLive
       return listSI({
         page: params.page,
         pageSize: params.pageSize,
@@ -50,6 +61,7 @@ export function SIDataTable({ onRefresh }: { onRefresh?: () => void }) {
         circle: params.filters.circle,
         city: params.filters.city,
         gmbStatus: params.filters.gmbStatus,
+        isLive: isLiveVal === 'live' ? true : isLiveVal === 'inactive' ? false : undefined,
       })
     },
     []
@@ -81,21 +93,63 @@ export function SIDataTable({ onRefresh }: { onRefresh?: () => void }) {
 
   const handleExport = useCallback(
     async (filters: Record<string, string>, search: string) => {
+      const isLiveVal = filters.isLive
       const res = await exportSI({
         search,
         state: filters.state,
         circle: filters.circle,
         city: filters.city,
         gmbStatus: filters.gmbStatus,
+        isLive:
+          isLiveVal === 'live' ? true : isLiveVal === 'inactive' ? false : undefined,
       })
-      downloadCSV(res.data, 'si-records.csv', SI_CSV_HEADERS)
+      downloadCSV(res.data, 'si-records.csv')
     },
     []
   )
 
+  const handleToggleLive = useCallback(
+    async (row: SIRecord) => {
+      try {
+        const result = await markSILive(row.id, !row.isLive)
+        const msgs: string[] = []
+        if (row.isLive) {
+          msgs.push('Marked as inactive')
+        } else {
+          msgs.push('Marked as live')
+          if (result.spotlightSync) {
+            if (result.spotlightSync.ok) {
+              msgs.push(`Linked Spotlight "${result.spotlightSync.code}" also set live`)
+            } else {
+              msgs.push(
+                `Linked Spotlight "${result.spotlightSync.code}" not found`
+              )
+            }
+          }
+          if (result.platformFeeCreated) {
+            msgs.push('Platform fee for current month created')
+          }
+        }
+        toast({
+          title: row.isLive ? 'Deactivated' : 'Activated',
+          description: msgs.join(' • '),
+        })
+        onRefresh?.()
+      } catch (e) {
+        toast({
+          title: 'Failed to update live status',
+          description: e instanceof Error ? e.message : 'Error',
+          variant: 'destructive',
+        })
+      }
+    },
+    [onRefresh, toast]
+  )
+
   const recordToForm = useCallback((r: SIRecord) => {
     const v: Record<string, string | null> = {}
-    for (const f of SI_FIELDS) v[f.name] = (r as unknown as Record<string, string | null>)[f.name]
+    for (const f of SI_FIELDS)
+      v[f.name] = (r as unknown as Record<string, string | null>)[f.name]
     return v
   }, [])
 
@@ -116,7 +170,7 @@ export function SIDataTable({ onRefresh }: { onRefresh?: () => void }) {
       key: 'businessName',
       header: 'Business Name',
       cell: (r) => (
-        <span className="line-clamp-2 max-w-[320px] text-sm">
+        <span className="line-clamp-2 max-w-[280px] text-sm">
           {r.businessName ?? '—'}
         </span>
       ),
@@ -147,18 +201,33 @@ export function SIDataTable({ onRefresh }: { onRefresh?: () => void }) {
       className: 'whitespace-nowrap',
     },
     {
-      key: 'gmbListingStatus',
-      header: 'GMB Status',
+      key: 'vmn',
+      header: 'VMN (S/Svc)',
+      cell: (r) => {
+        const sales = countLandingNumbers(r.salesLandingNumbers)
+        const service = countLandingNumbers(r.serviceLandingNumbers)
+        if (sales === 0 && service === 0) return <span className="text-muted-foreground">—</span>
+        return (
+          <div className="flex flex-col gap-0.5 text-xs">
+            <span className="text-emerald-600">Sales: {sales}</span>
+            <span className="text-amber-600">Svc: {service}</span>
+          </div>
+        )
+      },
+      className: 'whitespace-nowrap',
+    },
+    {
+      key: 'isLive',
+      header: 'Status',
       cell: (r) =>
-        r.gmbListingStatus ? (
-          <Badge
-            variant={r.gmbListingStatus === 'verified' ? 'default' : 'secondary'}
-            className="text-xs capitalize"
-          >
-            {r.gmbListingStatus}
+        r.isLive ? (
+          <Badge className="text-xs bg-emerald-600 hover:bg-emerald-600">
+            Live
           </Badge>
         ) : (
-          '—'
+          <Badge variant="outline" className="text-xs">
+            Inactive
+          </Badge>
         ),
       className: 'whitespace-nowrap',
     },
@@ -168,12 +237,27 @@ export function SIDataTable({ onRefresh }: { onRefresh?: () => void }) {
     { name: 'state', label: 'State', options: filterOptions.states },
     { name: 'circle', label: 'Circle', options: filterOptions.circles },
     { name: 'gmbStatus', label: 'GMB Status', options: filterOptions.gmbStatuses },
+    { name: 'isLive', label: 'Status', options: ['live', 'inactive'] },
+  ]
+
+  const extraActions: CustomRowAction<SIRecord>[] = [
+    {
+      key: 'toggle-live',
+      label: (row) => (row.isLive ? 'Mark as Inactive' : 'Mark as Live'),
+      icon: (row) =>
+        row.isLive ? (
+          <PowerOff className="mr-2 h-4 w-4" />
+        ) : (
+          <Power className="mr-2 h-4 w-4" />
+        ),
+      onClick: (row) => handleToggleLive(row),
+    },
   ]
 
   return (
     <DataTable<SIRecord>
       title="SI Data"
-      description="Manage Store Information records with full location and business details."
+      description="Manage Store Information records with full location, VMN mapping, and live status."
       columns={columns}
       fields={SI_FIELDS}
       filters={filters}
@@ -186,6 +270,7 @@ export function SIDataTable({ onRefresh }: { onRefresh?: () => void }) {
       totalLabel="records"
       addLabel="Add SI Record"
       exportLabel="Export CSV"
+      extraActions={extraActions}
     />
   )
 }
@@ -208,6 +293,11 @@ const SI_CSV_HEADERS = [
   'LONGITUDE',
   'GOOGLE PLUS PAGE',
   'VMN SI',
+  'SALES LANDING NUMBERS',
+  'SERVICE LANDING NUMBERS',
+  'LINKED SPOTLIGHT CODE',
+  'IS LIVE',
+  'LIVE SINCE',
   'WEEKLY OFF',
   'BUSINESS HOURS',
   'WEBSITE',
@@ -216,12 +306,9 @@ const SI_CSV_HEADERS = [
   'GMB LISTING STATUS',
 ]
 
-function downloadCSV<T extends Record<string, unknown>>(
-  rows: T[],
-  filename: string,
-  headers: string[]
-) {
-  const keys: (keyof T)[] = [
+function downloadCSV(rows: SIRecord[], filename: string) {
+  const headers = SI_CSV_HEADERS
+  const keys: (keyof SIRecord)[] = [
     'siCode',
     'clientCode',
     'businessProfileId',
@@ -239,6 +326,11 @@ function downloadCSV<T extends Record<string, unknown>>(
     'longitude',
     'googlePlusPage',
     'vmnSi',
+    'salesLandingNumbers',
+    'serviceLandingNumbers',
+    'linkedSpotlightCode',
+    'isLive',
+    'liveSince',
     'weeklyOff',
     'businessHours',
     'website',
@@ -248,7 +340,7 @@ function downloadCSV<T extends Record<string, unknown>>(
   ]
   const escape = (v: unknown) => {
     if (v === null || v === undefined) return ''
-    const s = String(v)
+    const s = typeof v === 'boolean' ? (v ? 'Yes' : 'No') : String(v)
     if (/[",\n]/.test(s)) return `"${s.replace(/"/g, '""')}"`
     return s
   }

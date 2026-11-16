@@ -79,6 +79,15 @@ export interface DataTableColumn<T> {
   className?: string
 }
 
+export interface CustomRowAction<T> {
+  key: string
+  label: string | ((row: T) => string)
+  icon?: React.ReactNode | ((row: T) => React.ReactNode)
+  onClick: (row: T) => void
+  variant?: 'default' | 'destructive'
+  show?: (row: T) => boolean
+}
+
 export interface DataTableProps<T extends { id: string }> {
   title: string
   description?: string
@@ -99,6 +108,7 @@ export interface DataTableProps<T extends { id: string }> {
   totalLabel: string
   addLabel: string
   exportLabel: string
+  extraActions?: CustomRowAction<T>[]
 }
 
 const PAGE_SIZE_OPTIONS = [10, 25, 50, 100]
@@ -118,6 +128,7 @@ export function DataTable<T extends { id: string }>({
   totalLabel,
   addLabel,
   exportLabel,
+  extraActions = [],
 }: DataTableProps<T>) {
   const { toast } = useToast()
   const [search, setSearch] = useState('')
@@ -372,6 +383,28 @@ export function DataTable<T extends { id: string }>({
                             <Pencil className="mr-2 h-4 w-4" />
                             Edit
                           </DropdownMenuItem>
+                          {extraActions
+                            .filter((a) => !a.show || a.show(row))
+                            .map((a) => {
+                              const label =
+                                typeof a.label === 'function' ? a.label(row) : a.label
+                              const icon =
+                                typeof a.icon === 'function' ? a.icon(row) : a.icon
+                              return (
+                                <DropdownMenuItem
+                                  key={a.key}
+                                  onClick={() => a.onClick(row)}
+                                  className={
+                                    a.variant === 'destructive'
+                                      ? 'text-destructive focus:text-destructive'
+                                      : ''
+                                  }
+                                >
+                                  {icon}
+                                  {label}
+                                </DropdownMenuItem>
+                              )
+                            })}
                           <DropdownMenuSeparator />
                           <DropdownMenuItem
                             onClick={() => setDeleteTarget(row)}

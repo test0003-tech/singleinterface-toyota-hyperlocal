@@ -5,6 +5,7 @@ import type {
   PaginatedResponse,
   SpotlightRecord,
 } from '@/lib/types'
+import { normalizeLandingNumbers, validateLandingNumbers } from '@/lib/validation'
 
 function cleanValue(v: unknown): string | null {
   if (v === null || v === undefined) return null
@@ -31,7 +32,14 @@ function buildInput(body: Partial<SpotlightRecordInput>): SpotlightRecordInput {
     domain: cleanValue(body.domain),
     adAccountCid: cleanValue(body.adAccountCid),
     facebookPageId: cleanValue(body.facebookPageId),
+    spotlightLandingNumbers: normalizeLandingNumbers(body.spotlightLandingNumbers),
   }
+}
+
+function validateInput(input: SpotlightRecordInput): string | null {
+  const e = validateLandingNumbers(input.spotlightLandingNumbers)
+  if (e) return `Spotlight Landing Numbers: ${e}`
+  return null
 }
 
 export async function GET(req: NextRequest) {
@@ -47,6 +55,7 @@ export async function GET(req: NextRequest) {
     const region = (searchParams.get('region') ?? '').trim()
     const city = (searchParams.get('city') ?? '').trim()
     const country = (searchParams.get('country') ?? '').trim()
+    const isLiveParam = searchParams.get('isLive')
     const exportCsv = searchParams.get('export') === '1'
 
     const where: Record<string, unknown> = {}
@@ -61,12 +70,15 @@ export async function GET(req: NextRequest) {
         { locality: { contains: search } },
         { pincode: { contains: search } },
         { domain: { contains: search } },
+        { spotlightLandingNumbers: { contains: search } },
       ]
     }
     if (state) where.state = state
     if (region) where.region = region
     if (city) where.city = city
     if (country) where.country = country
+    if (isLiveParam === 'true') where.isLive = true
+    if (isLiveParam === 'false') where.isLive = false
 
     if (exportCsv) {
       const all = await db.spotlightRecord.findMany({
@@ -113,6 +125,10 @@ export async function POST(req: NextRequest) {
       )
     }
     const input = buildInput(body)
+    const validationError = validateInput(input)
+    if (validationError) {
+      return NextResponse.json({ error: validationError }, { status: 400 })
+    }
     const existing = await db.spotlightRecord.findUnique({
       where: { clientCode: input.clientCode },
     })

@@ -11,10 +11,14 @@ import {
   Upload,
   Github,
   RefreshCw,
+  Wallet,
+  Receipt,
 } from 'lucide-react'
 import { Overview } from '@/components/dashboard/overview'
 import { SIDataTable } from '@/components/dashboard/si-data-table'
 import { SpotlightDataTable } from '@/components/dashboard/spotlight-data-table'
+import { MediaSpendTab } from '@/components/dashboard/media-spend-tab'
+import { PlatformFeesTab } from '@/components/dashboard/platform-fees-tab'
 import { ImportDialog } from '@/components/dashboard/import-dialog'
 import { useToast } from '@/hooks/use-toast'
 
@@ -75,18 +79,26 @@ export default function Home() {
       {/* Main content */}
       <main className="flex-1 mx-auto w-full max-w-7xl px-4 sm:px-6 py-6">
         <Tabs value={tab} onValueChange={setTab} className="space-y-6">
-          <TabsList className="grid w-full max-w-md grid-cols-3">
+          <TabsList className="grid w-full max-w-3xl grid-cols-5">
             <TabsTrigger value="overview" className="gap-1.5">
               <LayoutDashboard className="h-3.5 w-3.5" />
-              Overview
+              <span className="hidden sm:inline">Overview</span>
             </TabsTrigger>
             <TabsTrigger value="si" className="gap-1.5">
               <Building2 className="h-3.5 w-3.5" />
-              SI Data
+              <span className="hidden sm:inline">SI Data</span>
             </TabsTrigger>
             <TabsTrigger value="spotlight" className="gap-1.5">
               <MapPin className="h-3.5 w-3.5" />
-              Spotlight
+              <span className="hidden sm:inline">Spotlight</span>
+            </TabsTrigger>
+            <TabsTrigger value="media-spend" className="gap-1.5">
+              <Wallet className="h-3.5 w-3.5" />
+              <span className="hidden sm:inline">Media Spend</span>
+            </TabsTrigger>
+            <TabsTrigger value="platform-fees" className="gap-1.5">
+              <Receipt className="h-3.5 w-3.5" />
+              <span className="hidden sm:inline">Platform Fees</span>
             </TabsTrigger>
           </TabsList>
 
@@ -94,7 +106,7 @@ export default function Home() {
             <div>
               <h1 className="text-2xl font-bold tracking-tight">Dashboard</h1>
               <p className="text-sm text-muted-foreground mt-1">
-                Overview of all your location data records.
+                Overview of all your location data records, live status, and finances.
               </p>
             </div>
             <Overview refreshKey={refreshKey} />
@@ -106,6 +118,14 @@ export default function Home() {
 
           <TabsContent value="spotlight" className="mt-0">
             <SpotlightDataTable onRefresh={handleRefresh} />
+          </TabsContent>
+
+          <TabsContent value="media-spend" className="mt-0">
+            <MediaSpendTab refreshKey={refreshKey} />
+          </TabsContent>
+
+          <TabsContent value="platform-fees" className="mt-0">
+            <PlatformFeesTab refreshKey={refreshKey} />
           </TabsContent>
         </Tabs>
       </main>

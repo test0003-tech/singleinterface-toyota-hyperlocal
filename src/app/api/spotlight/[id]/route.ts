@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { db } from '@/lib/db'
 import type { SpotlightRecordInput } from '@/lib/types'
+import { normalizeLandingNumbers, validateLandingNumbers } from '@/lib/validation'
 
 function cleanValue(v: unknown): string | null {
   if (v === null || v === undefined) return null
@@ -27,7 +28,14 @@ function buildInput(body: Partial<SpotlightRecordInput>): SpotlightRecordInput {
     domain: cleanValue(body.domain),
     adAccountCid: cleanValue(body.adAccountCid),
     facebookPageId: cleanValue(body.facebookPageId),
+    spotlightLandingNumbers: normalizeLandingNumbers(body.spotlightLandingNumbers),
   }
+}
+
+function validateInput(input: SpotlightRecordInput): string | null {
+  const e = validateLandingNumbers(input.spotlightLandingNumbers)
+  if (e) return `Spotlight Landing Numbers: ${e}`
+  return null
 }
 
 export async function GET(
@@ -61,6 +69,10 @@ export async function PUT(
       )
     }
     const input = buildInput(body)
+    const validationError = validateInput(input)
+    if (validationError) {
+      return NextResponse.json({ error: validationError }, { status: 400 })
+    }
     const existing = await db.spotlightRecord.findUnique({ where: { id } })
     if (!existing) {
       return NextResponse.json({ error: 'Not found' }, { status: 404 })

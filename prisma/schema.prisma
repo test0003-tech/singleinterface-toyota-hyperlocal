@@ -54,6 +54,12 @@ model SIRecord {
   placeId            String?
   locationGroup      String?
   gmbListingStatus   String?
+  // Live status & VMN mapping
+  isLive               Boolean  @default(false)
+  liveSince            DateTime?
+  salesLandingNumbers  String?  // comma-separated 10-digit mobile numbers, up to 5
+  serviceLandingNumbers String? // comma-separated 10-digit mobile numbers, up to 5
+  linkedSpotlightCode  String?  // links to SpotlightRecord.clientCode for live sync
   createdAt          DateTime @default(now())
   updatedAt          DateTime @updatedAt
 
@@ -61,6 +67,7 @@ model SIRecord {
   @@index([state])
   @@index([circle])
   @@index([city])
+  @@index([isLive])
 }
 
 // Spotlight Data - 17 fields from "Spotlight data" sheet
@@ -83,10 +90,55 @@ model SpotlightRecord {
   domain             String?
   adAccountCid       String?
   facebookPageId     String?
+  // Live status & VMN mapping
+  isLive                 Boolean  @default(false)
+  liveSince              DateTime?
+  spotlightLandingNumbers String? // comma-separated 10-digit mobile numbers, up to 5
   createdAt          DateTime @default(now())
   updatedAt          DateTime @updatedAt
 
   @@index([state])
   @@index([region])
   @@index([city])
+  @@index([isLive])
+}
+
+// Media Spend - per location per month
+model MediaSpend {
+  id              String   @id @default(cuid())
+  recordType      String   // "SI" or "Spotlight"
+  recordCode      String   // siCode (SI) or clientCode (Spotlight)
+  month           String   // "YYYY-MM"
+  allocated       Float    @default(0) // budget added to wallet that month
+  utilized        Float    @default(0) // amount spent that month
+  pendingInWallet Float    @default(0) // balance carried to next month
+  notes           String?
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  @@unique([recordType, recordCode, month])
+  @@index([recordType, recordCode])
+  @@index([month])
+}
+
+// Platform Fees - per location per month (fixed 8060 + 18% GST)
+model PlatformFee {
+  id           String    @id @default(cuid())
+  recordType   String    // "SI" or "Spotlight"
+  recordCode   String    // siCode (SI) or clientCode (Spotlight)
+  month        String    // "YYYY-MM"
+  baseAmount   Float     @default(8060)
+  gstRate      Float     @default(18)
+  gstAmount    Float     @default(1450.8)
+  totalAmount  Float     @default(9510.8)
+  isPaid       Boolean   @default(false)
+  paidAt       DateTime?
+  notes        String?
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
+
+  @@unique([recordType, recordCode, month])
+  @@index([recordType, recordCode])
+  @@index([month])
+  @@index([isPaid])
 }

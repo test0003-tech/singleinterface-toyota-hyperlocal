@@ -4,18 +4,26 @@ import type { DashboardStats } from '@/lib/types'
 
 export async function GET() {
   try {
-    const [siRecords, spotlightRecords] = await Promise.all([
-      db.sIRecord.findMany({
-        select: { state: true, circle: true, gmbListingStatus: true },
-      }),
-      db.spotlightRecord.findMany({
-        select: { state: true, region: true, country: true },
-      }),
-    ])
+    const [siRecords, spotlightRecords, mediaSpends, platformFees] =
+      await Promise.all([
+        db.sIRecord.findMany({
+          select: { state: true, circle: true, gmbListingStatus: true, isLive: true },
+        }),
+        db.spotlightRecord.findMany({
+          select: { state: true, region: true, country: true, isLive: true },
+        }),
+        db.mediaSpend.findMany({
+          select: { month: true, allocated: true, utilized: true, pendingInWallet: true },
+        }),
+        db.platformFee.findMany({
+          select: { month: true, totalAmount: true, isPaid: true },
+        }),
+      ])
 
     const stateMapSi = new Map<string, number>()
     const circleMap = new Map<string, number>()
     const gmbMap = new Map<string, number>()
+    let siLive = 0
     for (const r of siRecords) {
       const st = r.state ?? 'Unknown'
       stateMapSi.set(st, (stateMapSi.get(st) ?? 0) + 1)
@@ -23,11 +31,13 @@ export async function GET() {
       circleMap.set(ci, (circleMap.get(ci) ?? 0) + 1)
       const gm = r.gmbListingStatus ?? 'Unknown'
       gmbMap.set(gm, (gmbMap.get(gm) ?? 0) + 1)
+      if (r.isLive) siLive++
     }
 
     const stateMapSpot = new Map<string, number>()
     const regionMap = new Map<string, number>()
     const countryMap = new Map<string, number>()
+    let spotLive = 0
     for (const r of spotlightRecords) {
       const st = r.state ?? 'Unknown'
       stateMapSpot.set(st, (stateMapSpot.get(st) ?? 0) + 1)
@@ -35,11 +45,60 @@ export async function GET() {
       regionMap.set(rg, (regionMap.get(rg) ?? 0) + 1)
       const co = r.country ?? 'Unknown'
       countryMap.set(co, (countryMap.get(co) ?? 0) + 1)
+      if (r.isLive) spotLive++
     }
+
+    // Media spend aggregation
+    const msByMonth = new Map<
+      string,
+      { allocated: number; utilized: number; pending: number }
+    >()
+    let msTotalAllocated = 0
+    let msTotalUtilized = 0
+    let msTotalPending = 0
+    for (const m of mediaSpends) {
+      msTotalAllocated += m.allocated
+      msTotalUtilized += m.utilized
+      msTotalPending += m.pendingInWallet
+      const cur = msByMonth.get(m.month) ?? { allocated: 0, utilized: 0, pending: 0 }
+      cur.allocated += m.allocated
+      cur.utilized += m.utilized
+      cur.pending += m.pendingInWallet
+      msByMonth.set(m.month, cur)
+    }
+    const msByMonthArr = [...msByMonth.entries()]
+      .map(([month, v]) => ({ month, ...v }))
+      .sort((a, b) => b.month.localeCompare(a.month))
+      .slice(0, 12)
+
+    // Platform fees aggregation
+    const pfByMonth = new Map<string, { billed: number; paid: number }>()
+    let pfTotalBilled = 0
+    let pfTotalPaid = 0
+    let pfPaidCount = 0
+    let pfPendingCount = 0
+    for (const p of platformFees) {
+      pfTotalBilled += p.totalAmount
+      const cur = pfByMonth.get(p.month) ?? { billed: 0, paid: 0 }
+      cur.billed += p.totalAmount
+      if (p.isPaid) {
+        pfTotalPaid += p.totalAmount
+        cur.paid += p.totalAmount
+        pfPaidCount++
+      } else {
+        pfPendingCount++
+      }
+      pfByMonth.set(p.month, cur)
+    }
+    const pfByMonthArr = [...pfByMonth.entries()]
+      .map(([month, v]) => ({ month, ...v }))
+      .sort((a, b) => b.month.localeCompare(a.month))
+      .slice(0, 12)
 
     const stats: DashboardStats = {
       si: {
         total: siRecords.length,
+        live: siLive,
         byState: [...stateMapSi.entries()]
           .map(([state, count]) => ({ state, count }))
           .sort((a, b) => b.count - a.count),
@@ -52,6 +111,7 @@ export async function GET() {
       },
       spotlight: {
         total: spotlightRecords.length,
+        live: spotLive,
         byState: [...stateMapSpot.entries()]
           .map(([state, count]) => ({ state, count }))
           .sort((a, b) => b.count - a.count),
@@ -61,6 +121,20 @@ export async function GET() {
         byCountry: [...countryMap.entries()]
           .map(([country, count]) => ({ country, count }))
           .sort((a, b) => b.count - a.count),
+      },
+      mediaSpend: {
+        totalAllocated: msTotalAllocated,
+        totalUtilized: msTotalUtilized,
+        totalPending: msTotalPending,
+        byMonth: msByMonthArr,
+      },
+      platformFees: {
+        totalBilled: pfTotalBilled,
+        totalPaid: pfTotalPaid,
+        totalPending: pfTotalBilled - pfTotalPaid,
+        paidCount: pfPaidCount,
+        pendingCount: pfPendingCount,
+        byMonth: pfByMonthArr,
       },
     }
     return NextResponse.json(stats)

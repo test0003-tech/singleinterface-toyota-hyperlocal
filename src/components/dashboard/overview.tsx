@@ -12,6 +12,9 @@ import {
   TrendingUp,
   ShieldCheck,
   AlertCircle,
+  Wallet,
+  Receipt,
+  Power,
 } from 'lucide-react'
 import {
   Bar,
@@ -25,6 +28,7 @@ import {
 } from 'recharts'
 import { getStats } from '@/lib/api'
 import type { DashboardStats } from '@/lib/types'
+import { formatCurrency } from '@/lib/validation'
 
 const SI_COLORS = ['#10b981', '#14b8a6', '#06b6d4', '#0ea5e9', '#6366f1', '#8b5cf6', '#a855f7', '#ec4899']
 const SPOT_COLORS = ['#f59e0b', '#ef4444', '#ec4899', '#8b5cf6', '#6366f1', '#0ea5e9', '#06b6d4', '#14b8a6']
@@ -112,14 +116,18 @@ export function Overview({ refreshKey }: { refreshKey: number }) {
           value={stats.si.total}
           icon={<Building2 className="h-5 w-5" />}
           accent="emerald"
-          subtitle={`${stats.si.byState.length} states`}
+          subtitle={`${stats.si.live} live • ${stats.si.byState.length} states`}
+          liveCount={stats.si.live}
+          liveLabel="live"
         />
         <StatCard
           title="Spotlight Records"
           value={stats.spotlight.total}
           icon={<MapPin className="h-5 w-5" />}
           accent="amber"
-          subtitle={`${stats.spotlight.byState.length} states`}
+          subtitle={`${stats.spotlight.live} live • ${stats.spotlight.byState.length} states`}
+          liveCount={stats.spotlight.live}
+          liveLabel="live"
         />
         <StatCard
           title="SI Circles"
@@ -278,6 +286,109 @@ export function Overview({ refreshKey }: { refreshKey: number }) {
         </Card>
       </div>
 
+      {/* Finance summary */}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+        <Card>
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2 text-base">
+              <Wallet className="h-4 w-4 text-emerald-600" />
+              Media Spend Summary
+            </CardTitle>
+            <CardDescription>
+              Allocated vs utilized vs pending in wallet
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            <div className="grid grid-cols-3 gap-3">
+              <div className="rounded-lg bg-emerald-500/5 p-3">
+                <p className="text-xs text-muted-foreground">Allocated</p>
+                <p className="text-lg font-bold text-emerald-600 mt-0.5">
+                  {formatCurrency(stats.mediaSpend.totalAllocated)}
+                </p>
+              </div>
+              <div className="rounded-lg bg-amber-500/5 p-3">
+                <p className="text-xs text-muted-foreground">Utilized</p>
+                <p className="text-lg font-bold text-amber-600 mt-0.5">
+                  {formatCurrency(stats.mediaSpend.totalUtilized)}
+                </p>
+              </div>
+              <div className="rounded-lg bg-violet-500/5 p-3">
+                <p className="text-xs text-muted-foreground">Pending Wallet</p>
+                <p className="text-lg font-bold text-violet-600 mt-0.5">
+                  {formatCurrency(stats.mediaSpend.totalPending)}
+                </p>
+              </div>
+            </div>
+            {stats.mediaSpend.byMonth.length > 0 && (
+              <div className="mt-4 space-y-1.5">
+                <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide">
+                  Recent months
+                </p>
+                {stats.mediaSpend.byMonth.slice(0, 3).map((m) => (
+                  <div key={m.month} className="flex items-center justify-between text-xs">
+                    <span className="text-muted-foreground">{m.month}</span>
+                    <span>
+                      <span className="text-emerald-600">{formatCurrency(m.allocated)}</span>
+                      {' / '}
+                      <span className="text-amber-600">{formatCurrency(m.utilized)}</span>
+                      {' / '}
+                      <span className="text-violet-600">{formatCurrency(m.pending)}</span>
+                    </span>
+                  </div>
+                ))}
+                <p className="text-[10px] text-muted-foreground pt-1">
+                  Format: allocated / utilized / pending
+                </p>
+              </div>
+            )}
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2 text-base">
+              <Receipt className="h-4 w-4 text-primary" />
+              Platform Fees Summary
+            </CardTitle>
+            <CardDescription>
+              Monthly fees @ ₹8,060 + 18% GST = ₹9,510.80 per live location
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            <div className="grid grid-cols-3 gap-3">
+              <div className="rounded-lg bg-primary/5 p-3">
+                <p className="text-xs text-muted-foreground">Total Billed</p>
+                <p className="text-lg font-bold text-primary mt-0.5">
+                  {formatCurrency(stats.platformFees.totalBilled)}
+                </p>
+              </div>
+              <div className="rounded-lg bg-emerald-500/5 p-3">
+                <p className="text-xs text-muted-foreground">Paid</p>
+                <p className="text-lg font-bold text-emerald-600 mt-0.5">
+                  {formatCurrency(stats.platformFees.totalPaid)}
+                </p>
+              </div>
+              <div className="rounded-lg bg-amber-500/5 p-3">
+                <p className="text-xs text-muted-foreground">Pending</p>
+                <p className="text-lg font-bold text-amber-600 mt-0.5">
+                  {formatCurrency(stats.platformFees.totalPending)}
+                </p>
+              </div>
+            </div>
+            <div className="mt-4 flex items-center gap-4 text-xs">
+              <div className="flex items-center gap-1.5">
+                <span className="h-2 w-2 rounded-full bg-emerald-600" />
+                <span>{stats.platformFees.paidCount} paid</span>
+              </div>
+              <div className="flex items-center gap-1.5">
+                <span className="h-2 w-2 rounded-full bg-amber-500" />
+                <span>{stats.platformFees.pendingCount} pending</span>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+      </div>
+
       {/* Quick insight */}
       <Card className="border-dashed">
         <CardContent className="pt-6">
@@ -319,12 +430,16 @@ function StatCard({
   icon,
   subtitle,
   accent,
+  liveCount,
+  liveLabel,
 }: {
   title: string
   value: number
   icon: React.ReactNode
   subtitle?: string
   accent: 'emerald' | 'amber' | 'cyan' | 'violet'
+  liveCount?: number
+  liveLabel?: string
 }) {
   const accentMap = {
     emerald: 'bg-emerald-500/10 text-emerald-600',
@@ -341,7 +456,15 @@ function StatCard({
         <div className={`rounded-lg p-2 ${accentMap[accent]}`}>{icon}</div>
       </CardHeader>
       <CardContent>
-        <div className="text-3xl font-bold tracking-tight">{value.toLocaleString()}</div>
+        <div className="flex items-baseline gap-2">
+          <div className="text-3xl font-bold tracking-tight">{value.toLocaleString()}</div>
+          {liveCount !== undefined && liveCount > 0 && (
+            <div className="flex items-center gap-1 text-xs font-medium text-emerald-600">
+              <Power className="h-3 w-3" />
+              {liveCount} {liveLabel}
+            </div>
+          )}
+        </div>
         {subtitle && (
           <p className="text-xs text-muted-foreground mt-1 truncate" title={subtitle}>
             {subtitle}
