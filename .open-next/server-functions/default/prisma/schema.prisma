@@ -142,3 +142,31 @@ model PlatformFee {
   @@index([month])
   @@index([isPaid])
 }
+
+// Custom Alert Rules - user-defined rules that generate alerts
+// when evaluated against the current data.
+model Rule {
+  id          String   @id @default(cuid())
+  name        String
+  description String?
+  // What type of record this rule evaluates
+  targetType  String   // "SI" | "Spotlight" | "MediaSpend" | "PlatformFee"
+  // The field on that record to check
+  field       String   // e.g. "allocated", "utilized", "isPaid", "isLive", "gmbListingStatus", "utilizationPercent"
+  // Comparison operator
+  operator    String   // "equals" | "not_equals" | "greater_than" | "less_than" | "contains" | "is_empty" | "is_not_empty" | "days_overdue"
+  // The value to compare against (string, parsed as number for numeric comparisons)
+  value       String?
+  // Alert severity when rule matches
+  severity    String   @default("warning") // "info" | "warning" | "critical"
+  // Scope: evaluate for current month only, or all records
+  scopeMonth  Boolean  @default(true) // if true, only current month records
+  // Enable/disable
+  isEnabled   Boolean  @default(true)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@index([targetType])
+  @@index([isEnabled])
+}
+

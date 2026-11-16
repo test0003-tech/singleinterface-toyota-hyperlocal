@@ -38,6 +38,14 @@
       "namedRegex": "^/api/platform\\-fees/(?<nxtPid>[^/]+?)(?:/)?$"
     },
     {
+      "page": "/api/rules/[id]",
+      "regex": "^/api/rules/([^/]+?)(?:/)?$",
+      "routeKeys": {
+        "nxtPid": "nxtPid"
+      },
+      "namedRegex": "^/api/rules/(?<nxtPid>[^/]+?)(?:/)?$"
+    },
+    {
       "page": "/api/si/[id]",
       "regex": "^/api/si/([^/]+?)(?:/)?$",
       "routeKeys": {
@@ -142,6 +150,18 @@
       "regex": "^/api/reminders(?:/)?$",
       "routeKeys": {},
       "namedRegex": "^/api/reminders(?:/)?$"
+    },
+    {
+      "page": "/api/rules",
+      "regex": "^/api/rules(?:/)?$",
+      "routeKeys": {},
+      "namedRegex": "^/api/rules(?:/)?$"
+    },
+    {
+      "page": "/api/rules/evaluate",
+      "regex": "^/api/rules/evaluate(?:/)?$",
+      "routeKeys": {},
+      "namedRegex": "^/api/rules/evaluate(?:/)?$"
     },
     {
       "page": "/api/si",

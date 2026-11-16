@@ -11,6 +11,9 @@ import type {
   PlatformFeeInput,
   RemindersData,
   ImportResult,
+  Rule,
+  RuleInput,
+  RuleEvaluationResult,
 } from './types'
 
 async function jsonFetch<T>(url: string, init?: RequestInit): Promise<T> {
@@ -384,4 +387,43 @@ export function importPlatformFeesJson(
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ rows, mode }),
   })
+}
+
+// --- Rules ---
+export function listRules(targetType?: string, isEnabled?: boolean) {
+  const q = new URLSearchParams()
+  if (targetType) q.set('targetType', targetType)
+  if (isEnabled !== undefined) q.set('isEnabled', String(isEnabled))
+  return jsonFetch<{ data: Rule[] }>(`/api/rules?${q.toString()}`)
+}
+
+export function createRule(data: RuleInput) {
+  return jsonFetch<Rule>(`/api/rules`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(data),
+  })
+}
+
+export function updateRule(id: string, data: RuleInput) {
+  return jsonFetch<Rule>(`/api/rules/${id}`, {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(data),
+  })
+}
+
+export function deleteRule(id: string) {
+  return jsonFetch<{ success: boolean }>(`/api/rules/${id}`, { method: 'DELETE' })
+}
+
+export interface EvaluateResult {
+  results: RuleEvaluationResult[]
+  alerts: RemindersData['alerts']
+  totalRules: number
+  totalMatches: number
+}
+
+export function evaluateRules() {
+  return jsonFetch<EvaluateResult>(`/api/rules/evaluate`)
 }

@@ -28,6 +28,8 @@ import {
   Receipt,
   RefreshCw,
   Bell,
+  Shield,
+  ShieldAlert,
 } from 'lucide-react'
 import { Overview } from '@/components/dashboard/overview'
 import { SIDataTable } from '@/components/dashboard/si-data-table'
@@ -36,10 +38,12 @@ import { MediaSpendTab } from '@/components/dashboard/media-spend-tab'
 import { PlatformFeesTab } from '@/components/dashboard/platform-fees-tab'
 import { ImportDialog } from '@/components/dashboard/import-dialog'
 import { RemindersWidget } from '@/components/dashboard/reminders-widget'
+import { RulesPage } from '@/components/dashboard/rules-page'
+import { AlertsCenterPage } from '@/components/dashboard/alerts-center-page'
 import { useToast } from '@/hooks/use-toast'
 import { formatMonth } from '@/lib/validation'
 
-type PageId = 'overview' | 'si' | 'spotlight' | 'media-spend' | 'platform-fees'
+type PageId = 'overview' | 'si' | 'spotlight' | 'media-spend' | 'platform-fees' | 'alerts' | 'rules'
 
 interface NavItem {
   id: PageId
@@ -57,6 +61,12 @@ const NAV_GROUPS: { label: string; items: NavItem[] }[] = [
         label: 'Overview',
         icon: <LayoutDashboard className="h-4 w-4" />,
         description: 'Reminders, stats & finance summary',
+      },
+      {
+        id: 'alerts',
+        label: 'Alerts Center',
+        icon: <ShieldAlert className="h-4 w-4" />,
+        description: 'All active alerts from rules & built-in checks',
       },
     ],
   },
@@ -94,6 +104,17 @@ const NAV_GROUPS: { label: string; items: NavItem[] }[] = [
       },
     ],
   },
+  {
+    label: 'Automation',
+    items: [
+      {
+        id: 'rules',
+        label: 'Alert Rules',
+        icon: <Shield className="h-4 w-4" />,
+        description: 'Define custom alert rules for your data',
+      },
+    ],
+  },
 ]
 
 const ALL_ITEMS: NavItem[] = NAV_GROUPS.flatMap((g) => g.items)
@@ -117,6 +138,8 @@ export function AppShell() {
   }, [handleRefresh, toast])
 
   const currentItem = ALL_ITEMS.find((i) => i.id === page) ?? ALL_ITEMS[0]
+  const currentGroup =
+    NAV_GROUPS.find((g) => g.items.some((i) => i.id === page))?.label ?? 'Dashboard'
   const currentMonth = formatMonth(
     `${new Date().getFullYear()}-${String(new Date().getMonth() + 1).padStart(2, '0')}`
   )
@@ -195,11 +218,16 @@ export function AppShell() {
           <header className="sticky top-0 z-30 flex h-14 items-center gap-3 border-b bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60 px-4">
             <SidebarTrigger className="-ml-1" />
             <div className="flex-1 min-w-0">
-              <div className="flex items-center gap-2">
-                <h1 className="text-sm font-semibold truncate">
+              <div className="flex items-center gap-2 flex-wrap">
+                <span className="hidden sm:inline text-xs text-muted-foreground/70">
+                  {currentGroup}
+                </span>
+                <span className="hidden sm:inline text-muted-foreground/40">/</span>
+                <h1 className="text-sm font-semibold truncate flex items-center gap-1.5">
+                  {currentItem.icon}
                   {currentItem.label}
                 </h1>
-                <span className="hidden sm:inline text-xs text-muted-foreground">
+                <span className="hidden md:inline text-xs text-muted-foreground">
                   — {currentItem.description}
                 </span>
               </div>
@@ -218,8 +246,8 @@ export function AppShell() {
                 variant="ghost"
                 size="icon"
                 className="h-8 w-8 relative"
-                onClick={() => setPage('overview')}
-                title="View reminders"
+                onClick={() => setPage('alerts')}
+                title="View alerts"
               >
                 <Bell className="h-4 w-4" />
               </Button>
@@ -251,6 +279,8 @@ export function AppShell() {
             {page === 'spotlight' && <SpotlightDataTable onRefresh={handleRefresh} />}
             {page === 'media-spend' && <MediaSpendTab refreshKey={refreshKey} />}
             {page === 'platform-fees' && <PlatformFeesTab refreshKey={refreshKey} />}
+            {page === 'alerts' && <AlertsCenterPage refreshKey={refreshKey} />}
+            {page === 'rules' && <RulesPage />}
           </main>
 
           {/* Footer */}
