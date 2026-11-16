@@ -1,0 +1,20 @@
+{
+  "/_global-error/page": "/_global-error",
+  "/_not-found/page": "/_not-found",
+  "/api/filters/route": "/api/filters",
+  "/api/import/route": "/api/import",
+  "/api/media-spend/[id]/route": "/api/media-spend/[id]",
+  "/api/media-spend/route": "/api/media-spend",
+  "/api/platform-fees/[id]/route": "/api/platform-fees/[id]",
+  "/api/platform-fees/generate/route": "/api/platform-fees/generate",
+  "/api/platform-fees/route": "/api/platform-fees",
+  "/api/route": "/api",
+  "/api/si/[id]/live/route": "/api/si/[id]/live",
+  "/api/si/[id]/route": "/api/si/[id]",
+  "/api/si/route": "/api/si",
+  "/api/spotlight/[id]/live/route": "/api/spotlight/[id]/live",
+  "/api/spotlight/[id]/route": "/api/spotlight/[id]",
+  "/api/spotlight/route": "/api/spotlight",
+  "/api/stats/route": "/api/stats",
+  "/page": "/"
+}

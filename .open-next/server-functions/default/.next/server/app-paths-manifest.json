@@ -1,0 +1,20 @@
+{
+  "/_global-error/page": "app/_global-error/page.js",
+  "/_not-found/page": "app/_not-found/page.js",
+  "/api/filters/route": "app/api/filters/route.js",
+  "/api/import/route": "app/api/import/route.js",
+  "/api/media-spend/[id]/route": "app/api/media-spend/[id]/route.js",
+  "/api/media-spend/route": "app/api/media-spend/route.js",
+  "/api/platform-fees/[id]/route": "app/api/platform-fees/[id]/route.js",
+  "/api/platform-fees/generate/route": "app/api/platform-fees/generate/route.js",
+  "/api/platform-fees/route": "app/api/platform-fees/route.js",
+  "/api/route": "app/api/route.js",
+  "/api/si/[id]/live/route": "app/api/si/[id]/live/route.js",
+  "/api/si/[id]/route": "app/api/si/[id]/route.js",
+  "/api/si/route": "app/api/si/route.js",
+  "/api/spotlight/[id]/live/route": "app/api/spotlight/[id]/live/route.js",
+  "/api/spotlight/[id]/route": "app/api/spotlight/[id]/route.js",
+  "/api/spotlight/route": "app/api/spotlight/route.js",
+  "/api/stats/route": "app/api/stats/route.js",
+  "/page": "app/page.js"
+}
