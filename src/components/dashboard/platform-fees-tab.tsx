@@ -68,6 +68,9 @@ import {
   Clock,
   Sparkles,
   Upload,
+  Wallet,
+  History,
+  AlertTriangle,
 } from 'lucide-react'
 import { useToast } from '@/hooks/use-toast'
 import {
@@ -80,7 +83,7 @@ import {
   importPlatformFeesFile,
   getStats,
 } from '@/lib/api'
-import type { PlatformFee, RecordType } from '@/lib/types'
+import type { PlatformFee, PlatformFeeInput, RecordType } from '@/lib/types'
 import {
   currentMonth,
   formatMonth,
@@ -88,6 +91,10 @@ import {
   formatCurrency,
 } from '@/lib/validation'
 import { FinanceImportDialog } from './finance-import-dialog'
+import { RecordPaymentModal } from './record-payment-modal'
+import { PaymentHistoryDrawer } from './payment-history-drawer'
+
+type PaymentStatusFilter = '' | 'unpaid' | 'partial' | 'paid'
 
 const PAGE_SIZE_OPTIONS = [10, 25, 50, 100]
 const DEFAULT_BASE = 8060
@@ -101,7 +108,9 @@ export function PlatformFeesTab({ refreshKey }: { refreshKey: number }) {
   const [pageSize, setPageSize] = useState(10)
   const [monthFilter, setMonthFilter] = useState('')
   const [typeFilter, setTypeFilter] = useState<'' | RecordType>('')
-  const [paidFilter, setPaidFilter] = useState<'' | 'true' | 'false'>('')
+  const [paymentStatusFilter, setPaymentStatusFilter] =
+    useState<PaymentStatusFilter>('')
+  const [overdueFilter, setOverdueFilter] = useState(false)
   const [loading, setLoading] = useState(true)
   const [data, setData] = useState<{ data: PlatformFee[]; total: number; totalPages: number } | null>(null)
   const [summary, setSummary] = useState<{
@@ -120,6 +129,10 @@ export function PlatformFeesTab({ refreshKey }: { refreshKey: number }) {
   const [generating, setGenerating] = useState(false)
   const [generateOpen, setGenerateOpen] = useState(false)
   const [importOpen, setImportOpen] = useState(false)
+  const [recordPaymentFee, setRecordPaymentFee] = useState<PlatformFee | null>(
+    null
+  )
+  const [historyFeeId, setHistoryFeeId] = useState<string | null>(null)
 
   const searchTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
   useEffect(() => {
@@ -142,8 +155,8 @@ export function PlatformFeesTab({ refreshKey }: { refreshKey: number }) {
         search: debouncedSearch,
         month: monthFilter,
         recordType: typeFilter || undefined,
-        isPaid:
-          paidFilter === 'true' ? true : paidFilter === 'false' ? false : undefined,
+        paymentStatus: paymentStatusFilter || undefined,
+        overdue: overdueFilter || undefined,
       })
       setData({ data: res.data, total: res.total, totalPages: res.totalPages })
     } catch (e) {
@@ -156,7 +169,16 @@ export function PlatformFeesTab({ refreshKey }: { refreshKey: number }) {
     } finally {
       setLoading(false)
     }
-  }, [page, pageSize, debouncedSearch, monthFilter, typeFilter, paidFilter, toast])
+  }, [
+    page,
+    pageSize,
+    debouncedSearch,
+    monthFilter,
+    typeFilter,
+    paymentStatusFilter,
+    overdueFilter,
+    toast,
+  ])
 
   useEffect(() => {
     fetchData()
@@ -204,13 +226,15 @@ export function PlatformFeesTab({ refreshKey }: { refreshKey: number }) {
   }
 
   async function handleSubmit(values: Record<string, string | null>) {
-    const payload = {
+    const payload: PlatformFeeInput = {
       recordType: (values.recordType as RecordType) || 'SI',
       recordCode: values.recordCode ?? '',
       month: values.month ?? currentMonth(),
+      invoiceNumber: values.invoiceNumber ?? null,
       baseAmount: values.baseAmount ? parseFloat(values.baseAmount) : DEFAULT_BASE,
       gstRate: values.gstRate ? parseFloat(values.gstRate) : DEFAULT_GST_RATE,
-      isPaid: values.isPaid === 'paid',
+      lateFee: values.lateFee ? parseFloat(values.lateFee) : 0,
+      dueDate: values.dueDate ?? null,
       notes: values.notes ?? null,
     }
     if (!payload.recordCode || !payload.month) {
@@ -223,6 +247,19 @@ export function PlatformFeesTab({ refreshKey }: { refreshKey: number }) {
       await createPlatformFee(payload)
       toast({ title: 'Created', description: 'Platform fee created' })
     }
+    await fetchData()
+    triggerStatsRefresh()
+  }
+
+  function openRecordPayment(row: PlatformFee) {
+    setRecordPaymentFee(row)
+  }
+
+  function openPaymentHistory(row: PlatformFee) {
+    setHistoryFeeId(row.id)
+  }
+
+  async function handlePaymentRecorded() {
     await fetchData()
     triggerStatsRefresh()
   }
@@ -254,8 +291,8 @@ export function PlatformFeesTab({ refreshKey }: { refreshKey: number }) {
         search: debouncedSearch,
         month: monthFilter,
         recordType: typeFilter || undefined,
-        isPaid:
-          paidFilter === 'true' ? true : paidFilter === 'false' ? false : undefined,
+        paymentStatus: paymentStatusFilter || undefined,
+        overdue: overdueFilter || undefined,
       })
       downloadCSV(res.data, 'platform-fees.csv')
       toast({ title: 'Exported', description: 'CSV downloaded' })
@@ -270,28 +307,6 @@ export function PlatformFeesTab({ refreshKey }: { refreshKey: number }) {
     }
   }
 
-  async function handleMarkPaid(row: PlatformFee) {
-    try {
-      await updatePlatformFee(row.id, {
-        recordType: row.recordType,
-        recordCode: row.recordCode,
-        month: row.month,
-        baseAmount: row.baseAmount,
-        gstRate: row.gstRate,
-        isPaid: true,
-        notes: row.notes,
-      })
-      toast({ title: 'Marked as Paid', description: `${row.recordCode} - ${formatMonth(row.month)}` })
-      await fetchData()
-      triggerStatsRefresh()
-    } catch (e) {
-      toast({
-        title: 'Failed',
-        description: e instanceof Error ? e.message : 'Error',
-        variant: 'destructive',
-      })
-    }
-  }
 
   const monthOptions = recentMonths(12)
   const total = data?.total ?? 0
@@ -426,16 +441,38 @@ export function PlatformFeesTab({ refreshKey }: { refreshKey: number }) {
             <SelectItem value="Spotlight">Spotlight</SelectItem>
           </SelectContent>
         </Select>
-        <Select value={paidFilter || '__all__'} onValueChange={(v) => { setPaidFilter(v === '__all__' ? '' : (v as 'true' | 'false')); setPage(1) }}>
-          <SelectTrigger className="w-[140px]">
-            <SelectValue placeholder="Status" />
+        <Select
+          value={paymentStatusFilter || '__all__'}
+          onValueChange={(v) => {
+            setPaymentStatusFilter(
+              v === '__all__' ? '' : (v as PaymentStatusFilter)
+            )
+            setPage(1)
+          }}
+        >
+          <SelectTrigger className="w-[150px]">
+            <SelectValue placeholder="Payment Status" />
           </SelectTrigger>
           <SelectContent>
             <SelectItem value="__all__">All Status</SelectItem>
-            <SelectItem value="false">Pending</SelectItem>
-            <SelectItem value="true">Paid</SelectItem>
+            <SelectItem value="unpaid">Unpaid</SelectItem>
+            <SelectItem value="partial">Partial</SelectItem>
+            <SelectItem value="paid">Paid</SelectItem>
           </SelectContent>
         </Select>
+        <Button
+          type="button"
+          variant={overdueFilter ? 'default' : 'outline'}
+          size="sm"
+          className="h-9"
+          onClick={() => {
+            setOverdueFilter((v) => !v)
+            setPage(1)
+          }}
+        >
+          <AlertTriangle className="mr-2 h-4 w-4" />
+          Overdue Only
+        </Button>
       </div>
 
       {/* Table */}
@@ -449,6 +486,7 @@ export function PlatformFeesTab({ refreshKey }: { refreshKey: number }) {
                 <TableHead className="text-right whitespace-nowrap">Base</TableHead>
                 <TableHead className="text-right whitespace-nowrap">GST ({DEFAULT_GST_RATE}%)</TableHead>
                 <TableHead className="text-right whitespace-nowrap">Total</TableHead>
+                <TableHead className="text-right whitespace-nowrap">Amount Paid</TableHead>
                 <TableHead className="whitespace-nowrap">Status</TableHead>
                 <TableHead className="w-[60px] text-right">Actions</TableHead>
               </TableRow>
@@ -457,7 +495,7 @@ export function PlatformFeesTab({ refreshKey }: { refreshKey: number }) {
               {loading ? (
                 Array.from({ length: 5 }).map((_, i) => (
                   <TableRow key={`s-${i}`}>
-                    {Array.from({ length: 7 }).map((_, j) => (
+                    {Array.from({ length: 8 }).map((_, j) => (
                       <TableCell key={j}>
                         <Skeleton className="h-5 w-full max-w-[120px]" />
                       </TableCell>
@@ -465,78 +503,112 @@ export function PlatformFeesTab({ refreshKey }: { refreshKey: number }) {
                   </TableRow>
                 ))
               ) : data && data.data.length > 0 ? (
-                data.data.map((row) => (
-                  <TableRow key={row.id}>
-                    <TableCell>
-                      <div className="flex flex-col">
-                        <span className="font-mono text-xs font-medium">
-                          {row.recordCode}
-                        </span>
-                        <Badge variant="outline" className="text-[10px] w-fit mt-0.5">
-                          {row.recordType}
-                        </Badge>
-                      </div>
-                    </TableCell>
-                    <TableCell className="whitespace-nowrap text-sm">
-                      {formatMonth(row.month)}
-                    </TableCell>
-                    <TableCell className="text-right whitespace-nowrap">
-                      {formatCurrency(row.baseAmount)}
-                    </TableCell>
-                    <TableCell className="text-right whitespace-nowrap text-muted-foreground">
-                      {formatCurrency(row.gstAmount)}
-                    </TableCell>
-                    <TableCell className="text-right whitespace-nowrap font-semibold">
-                      {formatCurrency(row.totalAmount)}
-                    </TableCell>
-                    <TableCell>
-                      {row.isPaid ? (
-                        <Badge className="bg-emerald-600 hover:bg-emerald-600 text-xs">
-                          <CheckCircle2 className="mr-1 h-3 w-3" />
-                          Paid
-                        </Badge>
-                      ) : (
-                        <Badge variant="outline" className="text-xs text-amber-600 border-amber-300">
-                          <Clock className="mr-1 h-3 w-3" />
-                          Pending
-                        </Badge>
-                      )}
-                    </TableCell>
-                    <TableCell className="text-right">
-                      <DropdownMenu>
-                        <DropdownMenuTrigger asChild>
-                          <Button variant="ghost" size="icon" className="h-8 w-8">
-                            <MoreHorizontal className="h-4 w-4" />
-                          </Button>
-                        </DropdownMenuTrigger>
-                        <DropdownMenuContent align="end">
-                          {!row.isPaid && (
-                            <DropdownMenuItem onClick={() => handleMarkPaid(row)}>
-                              <CheckCircle2 className="mr-2 h-4 w-4" />
-                              Mark as Paid
-                            </DropdownMenuItem>
+                data.data.map((row) => {
+                  const totalDue = row.totalAmount + (row.lateFee || 0)
+                  const remaining = Math.max(0, totalDue - row.amountPaid)
+                  return (
+                    <TableRow key={row.id}>
+                      <TableCell>
+                        <div className="flex flex-col">
+                          <span className="font-mono text-xs font-medium">
+                            {row.recordCode}
+                          </span>
+                          <Badge variant="outline" className="text-[10px] w-fit mt-0.5">
+                            {row.recordType}
+                          </Badge>
+                          {row.invoiceNumber && (
+                            <span className="text-[10px] text-muted-foreground font-mono mt-0.5">
+                              {row.invoiceNumber}
+                            </span>
                           )}
-                          <DropdownMenuItem onClick={() => openEdit(row)}>
-                            <Pencil className="mr-2 h-4 w-4" />
-                            Edit
-                          </DropdownMenuItem>
-                          <DropdownMenuSeparator />
-                          <DropdownMenuItem
-                            onClick={() => setDeleteTarget(row)}
-                            className="text-destructive focus:text-destructive"
+                        </div>
+                      </TableCell>
+                      <TableCell className="whitespace-nowrap text-sm">
+                        {formatMonth(row.month)}
+                      </TableCell>
+                      <TableCell className="text-right whitespace-nowrap">
+                        {formatCurrency(row.baseAmount)}
+                      </TableCell>
+                      <TableCell className="text-right whitespace-nowrap text-muted-foreground">
+                        {formatCurrency(row.gstAmount)}
+                      </TableCell>
+                      <TableCell className="text-right whitespace-nowrap font-semibold">
+                        {formatCurrency(row.totalAmount)}
+                      </TableCell>
+                      <TableCell className="text-right whitespace-nowrap">
+                        <div className="flex flex-col items-end">
+                          <span className="text-sm font-medium">
+                            {formatCurrency(row.amountPaid)}
+                          </span>
+                          <span className="text-[10px] text-muted-foreground">
+                            of {formatCurrency(totalDue)}
+                          </span>
+                          {remaining > 0 && (
+                            <span className="text-[10px] text-amber-600">
+                              {formatCurrency(remaining)} left
+                            </span>
+                          )}
+                        </div>
+                      </TableCell>
+                      <TableCell>
+                        {row.paymentStatus === 'paid' ? (
+                          <Badge className="bg-emerald-600 hover:bg-emerald-600 text-xs">
+                            <CheckCircle2 className="mr-1 h-3 w-3" />
+                            Paid
+                          </Badge>
+                        ) : row.paymentStatus === 'partial' ? (
+                          <Badge className="bg-amber-500/15 text-amber-700 hover:bg-amber-500/15 text-xs">
+                            <Clock className="mr-1 h-3 w-3" />
+                            Partial
+                          </Badge>
+                        ) : (
+                          <Badge
+                            variant="outline"
+                            className="text-xs text-red-600 border-red-300"
                           >
-                            <Trash2 className="mr-2 h-4 w-4" />
-                            Delete
-                          </DropdownMenuItem>
-                        </DropdownMenuContent>
-                      </DropdownMenu>
-                    </TableCell>
-                  </TableRow>
-                ))
+                            <Clock className="mr-1 h-3 w-3" />
+                            Unpaid
+                          </Badge>
+                        )}
+                      </TableCell>
+                      <TableCell className="text-right">
+                        <DropdownMenu>
+                          <DropdownMenuTrigger asChild>
+                            <Button variant="ghost" size="icon" className="h-8 w-8">
+                              <MoreHorizontal className="h-4 w-4" />
+                            </Button>
+                          </DropdownMenuTrigger>
+                          <DropdownMenuContent align="end">
+                            <DropdownMenuItem onClick={() => openRecordPayment(row)}>
+                              <Wallet className="mr-2 h-4 w-4" />
+                              Record Payment
+                            </DropdownMenuItem>
+                            <DropdownMenuItem onClick={() => openPaymentHistory(row)}>
+                              <History className="mr-2 h-4 w-4" />
+                              Payment History
+                            </DropdownMenuItem>
+                            <DropdownMenuItem onClick={() => openEdit(row)}>
+                              <Pencil className="mr-2 h-4 w-4" />
+                              Edit
+                            </DropdownMenuItem>
+                            <DropdownMenuSeparator />
+                            <DropdownMenuItem
+                              onClick={() => setDeleteTarget(row)}
+                              className="text-destructive focus:text-destructive"
+                            >
+                              <Trash2 className="mr-2 h-4 w-4" />
+                              Delete
+                            </DropdownMenuItem>
+                          </DropdownMenuContent>
+                        </DropdownMenu>
+                      </TableCell>
+                    </TableRow>
+                  )
+                })
               ) : (
                 <TableRow>
                   <TableCell
-                    colSpan={7}
+                    colSpan={8}
                     className="h-32 text-center text-muted-foreground"
                   >
                     No platform fee records found. Use &quot;Auto-Generate&quot; to
@@ -654,6 +726,27 @@ export function PlatformFeesTab({ refreshKey }: { refreshKey: number }) {
         }}
         downloadTemplate={downloadPlatformFeesTemplate}
       />
+
+      <RecordPaymentModal
+        open={!!recordPaymentFee}
+        onOpenChange={(v) => !v && setRecordPaymentFee(null)}
+        platformFeeId={recordPaymentFee?.id ?? ''}
+        fee={recordPaymentFee}
+        onRecorded={handlePaymentRecorded}
+      />
+
+      <PaymentHistoryDrawer
+        open={!!historyFeeId}
+        onOpenChange={(v) => !v && setHistoryFeeId(null)}
+        platformFeeId={historyFeeId}
+        onRecordPayment={() => {
+          if (historyFeeId) {
+            const fee = data?.data.find((r) => r.id === historyFeeId) ?? null
+            setHistoryFeeId(null)
+            if (fee) setRecordPaymentFee(fee)
+          }
+        }}
+      />
     </div>
   )
 }
@@ -706,9 +799,11 @@ function PlatformFeeForm({
   const [recordType, setRecordType] = useState<RecordType>('SI')
   const [recordCode, setRecordCode] = useState('')
   const [month, setMonth] = useState(currentMonth())
+  const [invoiceNumber, setInvoiceNumber] = useState('')
   const [baseAmount, setBaseAmount] = useState(String(DEFAULT_BASE))
   const [gstRate, setGstRate] = useState(String(DEFAULT_GST_RATE))
-  const [isPaid, setIsPaid] = useState<'paid' | 'unpaid'>('unpaid')
+  const [lateFee, setLateFee] = useState('')
+  const [dueDate, setDueDate] = useState('')
   const [notes, setNotes] = useState('')
   const [submitting, setSubmitting] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -718,9 +813,11 @@ function PlatformFeeForm({
       setRecordType(editing?.recordType ?? 'SI')
       setRecordCode(editing?.recordCode ?? '')
       setMonth(editing?.month ?? currentMonth())
+      setInvoiceNumber(editing?.invoiceNumber ?? '')
       setBaseAmount(editing ? String(editing.baseAmount) : String(DEFAULT_BASE))
       setGstRate(editing ? String(editing.gstRate) : String(DEFAULT_GST_RATE))
-      setIsPaid(editing?.isPaid ? 'paid' : 'unpaid')
+      setLateFee(editing?.lateFee ? String(editing.lateFee) : '')
+      setDueDate(editing?.dueDate ? editing.dueDate.slice(0, 10) : '')
       setNotes(editing?.notes ?? '')
       setError(null)
     }
@@ -728,8 +825,10 @@ function PlatformFeeForm({
 
   const baseNum = parseFloat(baseAmount) || 0
   const gstNum = parseFloat(gstRate) || 0
+  const lateFeeNum = parseFloat(lateFee) || 0
   const gstAmount = +(baseNum * (gstNum / 100)).toFixed(2)
   const totalAmount = +(baseNum + gstAmount).toFixed(2)
+  const totalDue = +(totalAmount + lateFeeNum).toFixed(2)
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault()
@@ -744,9 +843,11 @@ function PlatformFeeForm({
         recordType,
         recordCode,
         month,
+        invoiceNumber: invoiceNumber.trim() || null,
         baseAmount: baseAmount || null,
         gstRate: gstRate || null,
-        isPaid,
+        lateFee: lateFee || null,
+        dueDate: dueDate || null,
         notes: notes || null,
       })
       onOpenChange(false)
@@ -813,6 +914,18 @@ function PlatformFeeForm({
               placeholder={recordType === 'SI' ? '10001' : 'PU09A'}
             />
           </div>
+          <div className="space-y-1.5">
+            <Label htmlFor="invoiceNumber" className="text-xs font-medium">
+              Invoice Number{' '}
+              <span className="text-muted-foreground">(optional)</span>
+            </Label>
+            <Input
+              id="invoiceNumber"
+              value={invoiceNumber}
+              onChange={(e) => setInvoiceNumber(e.target.value)}
+              placeholder="INV-2025-001"
+            />
+          </div>
           <div className="grid grid-cols-2 gap-4">
             <div className="space-y-1.5">
               <Label htmlFor="baseAmount" className="text-xs font-medium">
@@ -839,6 +952,32 @@ function PlatformFeeForm({
               />
             </div>
           </div>
+          <div className="grid grid-cols-2 gap-4">
+            <div className="space-y-1.5">
+              <Label htmlFor="lateFee" className="text-xs font-medium">
+                Late Fee (INR)
+              </Label>
+              <Input
+                id="lateFee"
+                type="number"
+                step="any"
+                value={lateFee}
+                onChange={(e) => setLateFee(e.target.value)}
+                placeholder="0"
+              />
+            </div>
+            <div className="space-y-1.5">
+              <Label htmlFor="dueDate" className="text-xs font-medium">
+                Due Date
+              </Label>
+              <Input
+                id="dueDate"
+                type="date"
+                value={dueDate}
+                onChange={(e) => setDueDate(e.target.value)}
+              />
+            </div>
+          </div>
           <div className="rounded-md border bg-muted/30 p-3 grid grid-cols-3 gap-2 text-sm">
             <div>
               <p className="text-xs text-muted-foreground">GST Amount</p>
@@ -848,17 +987,16 @@ function PlatformFeeForm({
               <p className="text-xs text-muted-foreground">Total</p>
               <p className="font-semibold text-primary">{formatCurrency(totalAmount)}</p>
             </div>
-            <div className="space-y-1.5">
-              <Label className="text-xs font-medium">Status</Label>
-              <Select value={isPaid} onValueChange={(v) => setIsPaid(v as 'paid' | 'unpaid')}>
-                <SelectTrigger className="h-8">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="unpaid">Pending</SelectItem>
-                  <SelectItem value="paid">Paid</SelectItem>
-                </SelectContent>
-              </Select>
+            <div>
+              <p className="text-xs text-muted-foreground">Total Due</p>
+              <p className="font-semibold">
+                {formatCurrency(totalDue)}
+                {lateFeeNum > 0 && (
+                  <span className="ml-1 text-[10px] text-amber-600">
+                    (incl. late fee)
+                  </span>
+                )}
+              </p>
             </div>
           </div>
           <div className="space-y-1.5">
@@ -1027,11 +1165,15 @@ function downloadCSV(rows: PlatformFee[], filename: string) {
     'Location Type',
     'Location Code',
     'Month',
+    'Invoice Number',
     'Base Amount',
     'GST Rate',
     'GST Amount',
     'Total Amount',
-    'Is Paid',
+    'Late Fee',
+    'Amount Paid',
+    'Payment Status',
+    'Due Date',
     'Paid At',
     'Notes',
   ]
@@ -1041,6 +1183,7 @@ function downloadCSV(rows: PlatformFee[], filename: string) {
     if (/[",\n]/.test(s)) return `"${s.replace(/"/g, '""')}"`
     return s
   }
+  const fmtDate = (v: string | null) => (v ? v.slice(0, 10) : '')
   const csv = [
     headers.join(','),
     ...rows.map((r) =>
@@ -1048,12 +1191,16 @@ function downloadCSV(rows: PlatformFee[], filename: string) {
         r.recordType,
         r.recordCode,
         r.month,
+        r.invoiceNumber,
         r.baseAmount,
         r.gstRate,
         r.gstAmount,
         r.totalAmount,
-        r.isPaid,
-        r.paidAt,
+        r.lateFee,
+        r.amountPaid,
+        r.paymentStatus,
+        fmtDate(r.dueDate),
+        fmtDate(r.paidAt),
         r.notes,
       ]
         .map(escape)

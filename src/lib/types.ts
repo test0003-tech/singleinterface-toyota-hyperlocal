@@ -183,11 +183,15 @@ export interface PlatformFee {
   recordType: RecordType;
   recordCode: string;
   month: string;
+  invoiceNumber: string | null;
   baseAmount: number;
   gstRate: number;
   gstAmount: number;
   totalAmount: number;
-  isPaid: boolean;
+  lateFee: number;
+  amountPaid: number;
+  paymentStatus: 'unpaid' | 'partial' | 'paid';
+  dueDate: string | null;
   paidAt: string | null;
   notes: string | null;
   createdAt: string;
@@ -198,11 +202,47 @@ export interface PlatformFeeInput {
   recordType: RecordType;
   recordCode: string;
   month: string;
+  invoiceNumber?: string | null;
   baseAmount?: number;
   gstRate?: number;
-  isPaid?: boolean;
-  paidAt?: string | null;
+  lateFee?: number;
+  dueDate?: string | null;
   notes?: string | null;
+}
+
+export type PaymentMethod = 'bank_transfer' | 'cheque' | 'upi' | 'cash' | 'card' | 'other';
+
+export interface Payment {
+  id: string;
+  platformFeeId: string;
+  amount: number;
+  method: PaymentMethod;
+  reference: string | null;
+  paidDate: string;
+  notes: string | null;
+  createdAt: string;
+}
+
+export interface PaymentInput {
+  platformFeeId: string;
+  amount: number;
+  method?: PaymentMethod;
+  reference?: string | null;
+  paidDate?: string | null;
+  notes?: string | null;
+}
+
+export const PAYMENT_METHODS: { value: PaymentMethod; label: string }[] = [
+  { value: 'bank_transfer', label: 'Bank Transfer' },
+  { value: 'cheque', label: 'Cheque' },
+  { value: 'upi', label: 'UPI' },
+  { value: 'cash', label: 'Cash' },
+  { value: 'card', label: 'Card' },
+  { value: 'other', label: 'Other' },
+];
+
+export interface PlatformFeeWithPayments extends PlatformFee {
+  payments: Payment[];
 }
 
 export interface FinanceSummary {

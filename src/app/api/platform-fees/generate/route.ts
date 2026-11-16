@@ -65,7 +65,7 @@ export async function POST(req: NextRequest) {
             gstRate,
             gstAmount,
             totalAmount,
-            isPaid: false,
+            paymentStatus: 'unpaid',
           },
         })
         created++

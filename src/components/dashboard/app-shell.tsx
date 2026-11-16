@@ -30,6 +30,7 @@ import {
   Bell,
   Shield,
   ShieldAlert,
+  Banknote,
 } from 'lucide-react'
 import { Overview } from '@/components/dashboard/overview'
 import { SIDataTable } from '@/components/dashboard/si-data-table'
@@ -40,10 +41,11 @@ import { ImportDialog } from '@/components/dashboard/import-dialog'
 import { RemindersWidget } from '@/components/dashboard/reminders-widget'
 import { RulesPage } from '@/components/dashboard/rules-page'
 import { AlertsCenterPage } from '@/components/dashboard/alerts-center-page'
+import { PaymentsPage } from '@/components/dashboard/payments-page'
 import { useToast } from '@/hooks/use-toast'
 import { formatMonth } from '@/lib/validation'
 
-type PageId = 'overview' | 'si' | 'spotlight' | 'media-spend' | 'platform-fees' | 'alerts' | 'rules'
+type PageId = 'overview' | 'si' | 'spotlight' | 'media-spend' | 'platform-fees' | 'payments' | 'alerts' | 'rules'
 
 interface NavItem {
   id: PageId
@@ -101,6 +103,12 @@ const NAV_GROUPS: { label: string; items: NavItem[] }[] = [
         label: 'Platform Fees',
         icon: <Receipt className="h-4 w-4" />,
         description: 'Monthly platform fees per location',
+      },
+      {
+        id: 'payments',
+        label: 'Payments',
+        icon: <Banknote className="h-4 w-4" />,
+        description: 'All payment transactions & audit trail',
       },
     ],
   },
@@ -279,6 +287,7 @@ export function AppShell() {
             {page === 'spotlight' && <SpotlightDataTable onRefresh={handleRefresh} />}
             {page === 'media-spend' && <MediaSpendTab refreshKey={refreshKey} />}
             {page === 'platform-fees' && <PlatformFeesTab refreshKey={refreshKey} />}
+            {page === 'payments' && <PaymentsPage refreshKey={refreshKey} />}
             {page === 'alerts' && <AlertsCenterPage refreshKey={refreshKey} />}
             {page === 'rules' && <RulesPage />}
           </main>

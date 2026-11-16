@@ -7,6 +7,12 @@ function parseNum(v: unknown, def = 0): number {
   return Number.isFinite(n) ? n : def
 }
 
+function cleanStr(v: unknown): string | null {
+  if (v === null || v === undefined) return null
+  const s = String(v).trim()
+  return s === '' ? null : s
+}
+
 function computeAmounts(baseAmount: number, gstRate: number) {
   const gstAmount = +(baseAmount * (gstRate / 100)).toFixed(2)
   const totalAmount = +(baseAmount + gstAmount).toFixed(2)
@@ -17,25 +23,31 @@ function buildInput(body: Partial<PlatformFeeInput>): {
   recordType: RecordType
   recordCode: string
   month: string
+  invoiceNumber: string | null
   baseAmount: number
   gstRate: number
-  isPaid: boolean
-  paidAt: Date | null
+  lateFee: number
+  dueDate: Date | null
   notes: string | null
 } {
   const baseAmount = body.baseAmount !== undefined ? parseNum(body.baseAmount, 8060) : 8060
   const gstRate = body.gstRate !== undefined ? parseNum(body.gstRate, 18) : 18
-  const isPaid =
-    body.isPaid === true ||
-    (typeof body.isPaid === 'string' && body.isPaid === 'paid')
+  const lateFee = body.lateFee !== undefined ? parseNum(body.lateFee, 0) : 0
+  const dueDateStr = cleanStr(body.dueDate)
+  let dueDate: Date | null = null
+  if (dueDateStr) {
+    const d = new Date(dueDateStr)
+    if (!isNaN(d.getTime())) dueDate = d
+  }
   return {
     recordType: (body.recordType as RecordType) ?? 'SI',
     recordCode: (body.recordCode ?? '').trim(),
     month: (body.month ?? '').trim(),
+    invoiceNumber: cleanStr(body.invoiceNumber),
     baseAmount,
     gstRate,
-    isPaid,
-    paidAt: isPaid ? new Date() : null,
+    lateFee,
+    dueDate,
     notes: body.notes ? String(body.notes).trim() : null,
   }
 }
@@ -46,7 +58,10 @@ export async function GET(
 ) {
   try {
     const { id } = await params
-    const record = await db.platformFee.findUnique({ where: { id } })
+    const record = await db.platformFee.findUnique({
+      where: { id },
+      include: { payments: { orderBy: { paidDate: 'desc' } } },
+    })
     if (!record) {
       return NextResponse.json({ error: 'Not found' }, { status: 404 })
     }
@@ -115,12 +130,13 @@ export async function PUT(
         recordType: input.recordType,
         recordCode: input.recordCode,
         month: input.month,
+        invoiceNumber: input.invoiceNumber,
         baseAmount: input.baseAmount,
         gstRate: input.gstRate,
         gstAmount,
         totalAmount,
-        isPaid: input.isPaid,
-        paidAt: input.paidAt,
+        lateFee: input.lateFee,
+        dueDate: input.dueDate,
         notes: input.notes,
       },
     })

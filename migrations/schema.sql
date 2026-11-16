@@ -100,15 +100,32 @@ CREATE TABLE "PlatformFee" (
     "recordType" TEXT NOT NULL,
     "recordCode" TEXT NOT NULL,
     "month" TEXT NOT NULL,
+    "invoiceNumber" TEXT,
     "baseAmount" REAL NOT NULL DEFAULT 8060,
     "gstRate" REAL NOT NULL DEFAULT 18,
     "gstAmount" REAL NOT NULL DEFAULT 1450.8,
     "totalAmount" REAL NOT NULL DEFAULT 9510.8,
-    "isPaid" BOOLEAN NOT NULL DEFAULT false,
+    "lateFee" REAL NOT NULL DEFAULT 0,
+    "amountPaid" REAL NOT NULL DEFAULT 0,
+    "paymentStatus" TEXT NOT NULL DEFAULT 'unpaid',
+    "dueDate" DATETIME,
     "paidAt" DATETIME,
     "notes" TEXT,
     "createdAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
     "updatedAt" DATETIME NOT NULL
+);
+
+-- CreateTable
+CREATE TABLE "Payment" (
+    "id" TEXT NOT NULL PRIMARY KEY,
+    "platformFeeId" TEXT NOT NULL,
+    "amount" REAL NOT NULL,
+    "method" TEXT NOT NULL DEFAULT 'bank_transfer',
+    "reference" TEXT,
+    "paidDate" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "notes" TEXT,
+    "createdAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    CONSTRAINT "Payment_platformFeeId_fkey" FOREIGN KEY ("platformFeeId") REFERENCES "PlatformFee" ("id") ON DELETE CASCADE ON UPDATE CASCADE
 );
 
 -- CreateTable
@@ -179,10 +196,22 @@ CREATE INDEX "PlatformFee_recordType_recordCode_idx" ON "PlatformFee"("recordTyp
 CREATE INDEX "PlatformFee_month_idx" ON "PlatformFee"("month");
 
 -- CreateIndex
-CREATE INDEX "PlatformFee_isPaid_idx" ON "PlatformFee"("isPaid");
+CREATE INDEX "PlatformFee_paymentStatus_idx" ON "PlatformFee"("paymentStatus");
+
+-- CreateIndex
+CREATE INDEX "PlatformFee_dueDate_idx" ON "PlatformFee"("dueDate");
 
 -- CreateIndex
 CREATE UNIQUE INDEX "PlatformFee_recordType_recordCode_month_key" ON "PlatformFee"("recordType", "recordCode", "month");
+
+-- CreateIndex
+CREATE INDEX "Payment_platformFeeId_idx" ON "Payment"("platformFeeId");
+
+-- CreateIndex
+CREATE INDEX "Payment_paidDate_idx" ON "Payment"("paidDate");
+
+-- CreateIndex
+CREATE INDEX "Payment_method_idx" ON "Payment"("method");
 
 -- CreateIndex
 CREATE INDEX "Rule_targetType_idx" ON "Rule"("targetType");

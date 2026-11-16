@@ -85,7 +85,7 @@ export async function POST(
             gstRate,
             gstAmount,
             totalAmount,
-            isPaid: false,
+            paymentStatus: 'unpaid',
           },
         })
         platformFeeCreated = true

@@ -123,24 +123,48 @@ model MediaSpend {
 
 // Platform Fees - per location per month (fixed 8060 + 18% GST)
 model PlatformFee {
-  id           String    @id @default(cuid())
-  recordType   String    // "SI" or "Spotlight"
-  recordCode   String    // siCode (SI) or clientCode (Spotlight)
-  month        String    // "YYYY-MM"
-  baseAmount   Float     @default(8060)
-  gstRate      Float     @default(18)
-  gstAmount    Float     @default(1450.8)
-  totalAmount  Float     @default(9510.8)
-  isPaid       Boolean   @default(false)
-  paidAt       DateTime?
-  notes        String?
-  createdAt    DateTime  @default(now())
-  updatedAt    DateTime  @updatedAt
+  id            String    @id @default(cuid())
+  recordType    String    // "SI" or "Spotlight"
+  recordCode    String    // siCode (SI) or clientCode (Spotlight)
+  month         String    // "YYYY-MM"
+  invoiceNumber String?   // optional invoice reference
+  baseAmount    Float     @default(8060)
+  gstRate       Float     @default(18)
+  gstAmount     Float     @default(1450.8)
+  totalAmount   Float     @default(9510.8)
+  lateFee       Float     @default(0) // additional late fee if applicable
+  // Payment tracking
+  amountPaid    Float     @default(0) // sum of all payments
+  paymentStatus String    @default("unpaid") // "unpaid" | "partial" | "paid"
+  dueDate       DateTime? // when payment is due
+  paidAt        DateTime? // fully paid date
+  notes         String?
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+  payments      Payment[]
 
   @@unique([recordType, recordCode, month])
   @@index([recordType, recordCode])
   @@index([month])
-  @@index([isPaid])
+  @@index([paymentStatus])
+  @@index([dueDate])
+}
+
+// Individual payment transactions - one fee can have multiple payments
+model Payment {
+  id            String   @id @default(cuid())
+  platformFeeId String   // FK to PlatformFee
+  amount        Float    // payment amount
+  method        String   @default("bank_transfer") // "bank_transfer" | "cheque" | "upi" | "cash" | "card" | "other"
+  reference     String?  // transaction ID, cheque number, UPI ref, etc.
+  paidDate      DateTime @default(now()) // when the payment was made
+  notes         String?
+  createdAt     DateTime @default(now())
+  platformFee   PlatformFee @relation(fields: [platformFeeId], references: [id], onDelete: Cascade)
+
+  @@index([platformFeeId])
+  @@index([paidDate])
+  @@index([method])
 }
 
 // Custom Alert Rules - user-defined rules that generate alerts
