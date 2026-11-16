@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { db } from '@/lib/db'
 import { currentMonth } from '@/lib/validation'
+import { auditLog } from '@/lib/audit'
 
 // Mark an SI record as live (or toggle off).
 // When marking live:
@@ -35,6 +36,14 @@ export async function POST(
     const updated = await db.sIRecord.update({
       where: { id },
       data: { isLive: wantLive, liveSince },
+    })
+
+    await auditLog({
+      action: 'update',
+      entityType: 'SI',
+      entityId: record.id,
+      entityCode: record.siCode,
+      summary: `SI marked ${wantLive ? 'live' : 'inactive'}`,
     })
 
     const syncResults: { spotlight?: { code: string; ok: boolean } } = {}

@@ -144,6 +144,24 @@ CREATE TABLE "Rule" (
     "updatedAt" DATETIME NOT NULL
 );
 
+-- CreateTable
+CREATE TABLE "AuditLog" (
+    "id" TEXT NOT NULL PRIMARY KEY,
+    "action" TEXT NOT NULL,
+    "entityType" TEXT NOT NULL,
+    "entityId" TEXT NOT NULL,
+    "entityCode" TEXT,
+    "changes" TEXT,
+    "summary" TEXT,
+    "createdAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
+
+-- CreateTable
+CREATE TABLE "Counter" (
+    "id" TEXT NOT NULL PRIMARY KEY,
+    "value" INTEGER NOT NULL DEFAULT 0
+);
+
 -- CreateIndex
 CREATE UNIQUE INDEX "User_email_key" ON "User"("email");
 
@@ -218,3 +236,15 @@ CREATE INDEX "Rule_targetType_idx" ON "Rule"("targetType");
 
 -- CreateIndex
 CREATE INDEX "Rule_isEnabled_idx" ON "Rule"("isEnabled");
+
+-- CreateIndex
+CREATE INDEX "AuditLog_entityType_idx" ON "AuditLog"("entityType");
+
+-- CreateIndex
+CREATE INDEX "AuditLog_entityId_idx" ON "AuditLog"("entityId");
+
+-- CreateIndex
+CREATE INDEX "AuditLog_action_idx" ON "AuditLog"("action");
+
+-- CreateIndex
+CREATE INDEX "AuditLog_createdAt_idx" ON "AuditLog"("createdAt");

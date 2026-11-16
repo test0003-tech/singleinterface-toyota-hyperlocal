@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { db } from '@/lib/db'
 import type { SpotlightRecordInput } from '@/lib/types'
 import { normalizeLandingNumbers, validateLandingNumbers } from '@/lib/validation'
+import { auditLog, diffChanges } from '@/lib/audit'
 
 function cleanValue(v: unknown): string | null {
   if (v === null || v === undefined) return null
@@ -88,9 +89,21 @@ export async function PUT(
         )
       }
     }
+    const changes = diffChanges(
+      existing as unknown as Record<string, unknown>,
+      input as unknown as Record<string, unknown>
+    )
     const updated = await db.spotlightRecord.update({
       where: { id },
       data: input,
+    })
+    await auditLog({
+      action: 'update',
+      entityType: 'Spotlight',
+      entityId: id,
+      entityCode: existing.clientCode,
+      changes,
+      summary: 'Spotlight record updated',
     })
     return NextResponse.json(updated)
   } catch (e) {
@@ -109,6 +122,13 @@ export async function DELETE(
     if (!existing) {
       return NextResponse.json({ error: 'Not found' }, { status: 404 })
     }
+    await auditLog({
+      action: 'delete',
+      entityType: 'Spotlight',
+      entityId: id,
+      entityCode: existing.clientCode,
+      summary: 'Spotlight record deleted',
+    })
     await db.spotlightRecord.delete({ where: { id } })
     return NextResponse.json({ success: true })
   } catch (e) {

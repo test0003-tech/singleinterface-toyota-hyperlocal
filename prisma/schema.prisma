@@ -194,3 +194,27 @@ model Rule {
   @@index([isEnabled])
 }
 
+// Audit Log - tracks all create/update/delete operations on records
+model AuditLog {
+  id        String   @id @default(cuid())
+  action    String   // "create" | "update" | "delete"
+  entityType String  // "SI" | "Spotlight" | "MediaSpend" | "PlatformFee" | "Payment" | "Rule"
+  entityId  String   // ID of the affected record
+  entityCode String? // human-readable code (siCode, clientCode, recordCode+month, etc.)
+  changes   String?  // JSON diff of changed fields
+  summary   String?  // human-readable summary
+  createdAt DateTime @default(now())
+
+  @@index([entityType])
+  @@index([entityId])
+  @@index([action])
+  @@index([createdAt])
+}
+
+// Counter for auto-invoice numbering
+model Counter {
+  id    String @id
+  value Int    @default(0)
+}
+
+

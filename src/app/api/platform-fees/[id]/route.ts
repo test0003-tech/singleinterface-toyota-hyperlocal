@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { db } from '@/lib/db'
 import type { PlatformFeeInput, RecordType } from '@/lib/types'
+import { auditLog, diffChanges } from '@/lib/audit'
 
 function parseNum(v: unknown, def = 0): number {
   const n = typeof v === 'string' ? parseFloat(v) : typeof v === 'number' ? v : NaN
@@ -124,6 +125,10 @@ export async function PUT(
       input.baseAmount,
       input.gstRate
     )
+    const changes = diffChanges(
+      existing as unknown as Record<string, unknown>,
+      input as unknown as Record<string, unknown>
+    )
     const updated = await db.platformFee.update({
       where: { id },
       data: {
@@ -139,6 +144,14 @@ export async function PUT(
         dueDate: input.dueDate,
         notes: input.notes,
       },
+    })
+    await auditLog({
+      action: 'update',
+      entityType: 'PlatformFee',
+      entityId: id,
+      entityCode: `${existing.recordCode}-${existing.month}`,
+      changes,
+      summary: 'Platform fee updated',
     })
     return NextResponse.json(updated)
   } catch (e) {
@@ -157,6 +170,13 @@ export async function DELETE(
     if (!existing) {
       return NextResponse.json({ error: 'Not found' }, { status: 404 })
     }
+    await auditLog({
+      action: 'delete',
+      entityType: 'PlatformFee',
+      entityId: id,
+      entityCode: `${existing.recordCode}-${existing.month}`,
+      summary: 'Platform fee deleted',
+    })
     await db.platformFee.delete({ where: { id } })
     return NextResponse.json({ success: true })
   } catch (e) {

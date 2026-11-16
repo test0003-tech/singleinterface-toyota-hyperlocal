@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { db } from '@/lib/db'
 import type { PaymentInput, PaymentMethod, PaginatedResponse, Payment } from '@/lib/types'
+import { auditLog } from '@/lib/audit'
 
 const VALID_METHODS: PaymentMethod[] = ['bank_transfer', 'cheque', 'upi', 'cash', 'card', 'other']
 
@@ -144,6 +145,14 @@ export async function POST(req: NextRequest) {
 
     // Recalculate the fee's payment status
     await recalcFeePayment(platformFeeId)
+
+    await auditLog({
+      action: 'create',
+      entityType: 'Payment',
+      entityId: created.id,
+      entityCode: created.reference ?? created.id,
+      summary: `Payment of ₹${created.amount} recorded via ${created.method}`,
+    })
 
     return NextResponse.json(created, { status: 201 })
   } catch (e) {

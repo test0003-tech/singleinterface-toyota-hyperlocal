@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { db } from '@/lib/db'
 import type { SIRecordInput } from '@/lib/types'
 import { normalizeLandingNumbers, validateLandingNumbers } from '@/lib/validation'
+import { auditLog, diffChanges } from '@/lib/audit'
 
 function cleanValue(v: unknown): string | null {
   if (v === null || v === undefined) return null
@@ -98,7 +99,19 @@ export async function PUT(
         )
       }
     }
+    const changes = diffChanges(
+      existing as unknown as Record<string, unknown>,
+      input as unknown as Record<string, unknown>
+    )
     const updated = await db.sIRecord.update({ where: { id }, data: input })
+    await auditLog({
+      action: 'update',
+      entityType: 'SI',
+      entityId: id,
+      entityCode: existing.siCode,
+      changes,
+      summary: 'SI record updated',
+    })
     return NextResponse.json(updated)
   } catch (e) {
     console.error('SI PUT error', e)
@@ -116,6 +129,13 @@ export async function DELETE(
     if (!existing) {
       return NextResponse.json({ error: 'Not found' }, { status: 404 })
     }
+    await auditLog({
+      action: 'delete',
+      entityType: 'SI',
+      entityId: id,
+      entityCode: existing.siCode,
+      summary: 'SI record deleted',
+    })
     await db.sIRecord.delete({ where: { id } })
     return NextResponse.json({ success: true })
   } catch (e) {

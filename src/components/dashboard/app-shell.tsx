@@ -31,6 +31,9 @@ import {
   Shield,
   ShieldAlert,
   Banknote,
+  BarChart3,
+  ClipboardCheck,
+  History,
 } from 'lucide-react'
 import { Overview } from '@/components/dashboard/overview'
 import { SIDataTable } from '@/components/dashboard/si-data-table'
@@ -42,10 +45,13 @@ import { RemindersWidget } from '@/components/dashboard/reminders-widget'
 import { RulesPage } from '@/components/dashboard/rules-page'
 import { AlertsCenterPage } from '@/components/dashboard/alerts-center-page'
 import { PaymentsPage } from '@/components/dashboard/payments-page'
+import { FinancialReportsPage } from '@/components/dashboard/financial-reports-page'
+import { DataQualityPage } from '@/components/dashboard/data-quality-page'
+import { AuditLogPage } from '@/components/dashboard/audit-log-page'
 import { useToast } from '@/hooks/use-toast'
 import { formatMonth } from '@/lib/validation'
 
-type PageId = 'overview' | 'si' | 'spotlight' | 'media-spend' | 'platform-fees' | 'payments' | 'alerts' | 'rules'
+type PageId = 'overview' | 'si' | 'spotlight' | 'media-spend' | 'platform-fees' | 'payments' | 'alerts' | 'rules' | 'financial-reports' | 'data-quality' | 'audit-log'
 
 interface NavItem {
   id: PageId
@@ -109,6 +115,29 @@ const NAV_GROUPS: { label: string; items: NavItem[] }[] = [
         label: 'Payments',
         icon: <Banknote className="h-4 w-4" />,
         description: 'All payment transactions & audit trail',
+      },
+    ],
+  },
+  {
+    label: 'Reports',
+    items: [
+      {
+        id: 'financial-reports',
+        label: 'Financial Reports',
+        icon: <BarChart3 className="h-4 w-4" />,
+        description: 'Aging report, collection analytics & GST summary',
+      },
+      {
+        id: 'data-quality',
+        label: 'Data Quality',
+        icon: <ClipboardCheck className="h-4 w-4" />,
+        description: 'Completeness scores, missing fields & recommendations',
+      },
+      {
+        id: 'audit-log',
+        label: 'Audit Log',
+        icon: <History className="h-4 w-4" />,
+        description: 'Complete history of all data changes',
       },
     ],
   },
@@ -288,6 +317,9 @@ export function AppShell() {
             {page === 'media-spend' && <MediaSpendTab refreshKey={refreshKey} />}
             {page === 'platform-fees' && <PlatformFeesTab refreshKey={refreshKey} />}
             {page === 'payments' && <PaymentsPage refreshKey={refreshKey} />}
+            {page === 'financial-reports' && <FinancialReportsPage />}
+            {page === 'data-quality' && <DataQualityPage />}
+            {page === 'audit-log' && <AuditLogPage refreshKey={refreshKey} />}
             {page === 'alerts' && <AlertsCenterPage refreshKey={refreshKey} />}
             {page === 'rules' && <RulesPage />}
           </main>

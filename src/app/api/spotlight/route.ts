@@ -6,6 +6,7 @@ import type {
   SpotlightRecord,
 } from '@/lib/types'
 import { normalizeLandingNumbers, validateLandingNumbers } from '@/lib/validation'
+import { auditLog } from '@/lib/audit'
 
 function cleanValue(v: unknown): string | null {
   if (v === null || v === undefined) return null
@@ -139,6 +140,13 @@ export async function POST(req: NextRequest) {
       )
     }
     const created = await db.spotlightRecord.create({ data: input })
+    await auditLog({
+      action: 'create',
+      entityType: 'Spotlight',
+      entityId: created.id,
+      entityCode: created.clientCode,
+      summary: 'Spotlight record created',
+    })
     return NextResponse.json(created, { status: 201 })
   } catch (e) {
     console.error('Spotlight POST error', e)

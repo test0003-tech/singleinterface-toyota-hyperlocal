@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { db } from '@/lib/db'
 import type { SIRecordInput, PaginatedResponse, SIRecord } from '@/lib/types'
 import { normalizeLandingNumbers, validateLandingNumbers } from '@/lib/validation'
+import { auditLog } from '@/lib/audit'
 
 function cleanValue(v: unknown): string | null {
   if (v === null || v === undefined) return null
@@ -147,6 +148,13 @@ export async function POST(req: NextRequest) {
       )
     }
     const created = await db.sIRecord.create({ data: input })
+    await auditLog({
+      action: 'create',
+      entityType: 'SI',
+      entityId: created.id,
+      entityCode: created.siCode,
+      summary: 'SI record created',
+    })
     return NextResponse.json(created, { status: 201 })
   } catch (e) {
     console.error('SI POST error', e)

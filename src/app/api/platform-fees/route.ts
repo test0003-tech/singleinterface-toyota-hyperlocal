@@ -8,6 +8,7 @@ import type {
   RecordType,
 } from '@/lib/types'
 import { currentMonth } from '@/lib/validation'
+import { auditLog, generateInvoiceNumber } from '@/lib/audit'
 
 function parseNum(v: unknown, def = 0): number {
   const n = typeof v === 'string' ? parseFloat(v) : typeof v === 'number' ? v : NaN
@@ -176,6 +177,10 @@ export async function POST(req: NextRequest) {
         { status: 409 }
       )
     }
+    // Auto-generate invoice number if not provided
+    if (!input.invoiceNumber) {
+      input.invoiceNumber = await generateInvoiceNumber(input.month)
+    }
     const created = await db.platformFee.create({
       data: {
         recordType: input.recordType,
@@ -191,6 +196,13 @@ export async function POST(req: NextRequest) {
         notes: input.notes,
         // paymentStatus defaults to "unpaid", amountPaid to 0
       },
+    })
+    await auditLog({
+      action: 'create',
+      entityType: 'PlatformFee',
+      entityId: created.id,
+      entityCode: `${created.recordCode}-${created.month}`,
+      summary: `Platform fee created${created.invoiceNumber ? ' (invoice: ' + created.invoiceNumber + ')' : ''}`,
     })
     return NextResponse.json(created, { status: 201 })
   } catch (e) {
