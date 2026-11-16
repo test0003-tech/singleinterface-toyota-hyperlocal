@@ -15,12 +15,13 @@ function parseNum(v: unknown, def = 0): number {
 
 function buildInput(body: Partial<MediaSpendInput>): MediaSpendInput {
   return {
-    recordType: (body.recordType as RecordType) ?? 'SI',
+    recordType: 'Spotlight' as RecordType, // Media spend is only for Spotlight
     recordCode: (body.recordCode ?? '').trim(),
     month: (body.month ?? currentMonth()).trim(),
-    allocated: parseNum(body.allocated, 0),
-    utilized: parseNum(body.utilized, 0),
-    pendingInWallet: parseNum(body.pendingInWallet, 0),
+    metaAllocated: parseNum(body.metaAllocated, 0),
+    metaUtilized: parseNum(body.metaUtilized, 0),
+    googleAllocated: parseNum(body.googleAllocated, 0),
+    googleUtilized: parseNum(body.googleUtilized, 0),
     notes: body.notes ? String(body.notes).trim() : null,
   }
 }
@@ -35,7 +36,6 @@ export async function GET(req: NextRequest) {
     )
     const search = (searchParams.get('search') ?? '').trim()
     const month = (searchParams.get('month') ?? '').trim()
-    const recordType = (searchParams.get('recordType') ?? '').trim()
     const recordCode = (searchParams.get('recordCode') ?? '').trim()
     const exportCsv = searchParams.get('export') === '1'
 
@@ -47,14 +47,12 @@ export async function GET(req: NextRequest) {
       ]
     }
     if (month) where.month = month
-    if (recordType === 'SI' || recordType === 'Spotlight')
-      where.recordType = recordType
     if (recordCode) where.recordCode = recordCode
 
     if (exportCsv) {
       const all = await db.mediaSpend.findMany({
         where,
-        orderBy: [{ month: 'desc' }, { recordType: 'asc' }, { recordCode: 'asc' }],
+        orderBy: [{ month: 'desc' }, { recordCode: 'asc' }],
       })
       return NextResponse.json({ data: all })
     }
@@ -63,7 +61,7 @@ export async function GET(req: NextRequest) {
       db.mediaSpend.count({ where }),
       db.mediaSpend.findMany({
         where,
-        orderBy: [{ month: 'desc' }, { recordType: 'asc' }, { recordCode: 'asc' }],
+        orderBy: [{ month: 'desc' }, { recordCode: 'asc' }],
         skip: (page - 1) * pageSize,
         take: pageSize,
       }),
@@ -91,13 +89,7 @@ export async function POST(req: NextRequest) {
     const body = await req.json()
     if (!body?.recordCode || !body?.month) {
       return NextResponse.json(
-        { error: 'recordCode and month are required' },
-        { status: 400 }
-      )
-    }
-    if (body.recordType !== 'SI' && body.recordType !== 'Spotlight') {
-      return NextResponse.json(
-        { error: 'recordType must be SI or Spotlight' },
+        { error: 'recordCode (Spotlight Client Code) and month are required' },
         { status: 400 }
       )
     }
@@ -114,12 +106,12 @@ export async function POST(req: NextRequest) {
     if (existing) {
       return NextResponse.json(
         {
-          error: `Media spend for ${input.recordType} ${input.recordCode} in ${input.month} already exists`,
+          error: `Media spend for ${input.recordCode} in ${input.month} already exists`,
         },
         { status: 409 }
       )
     }
-    // Auto-calculate pendingInWallet = allocated + previousMonth.pendingInWallet - utilized
+    // Auto-calculate pendingInWallet for both Meta and Google separately
     const prevMonth = previousMonth(input.month)
     const prevEntry = await db.mediaSpend.findUnique({
       where: {
@@ -129,17 +121,35 @@ export async function POST(req: NextRequest) {
           month: prevMonth,
         },
       },
-      select: { pendingInWallet: true },
+      select: { metaPendingInWallet: true, googlePendingInWallet: true },
     })
-    const prevPending = prevEntry?.pendingInWallet ?? 0
-    const allocated = input.allocated ?? 0
-    const utilized = input.utilized ?? 0
-    const pendingInWallet = calculatePendingInWallet(allocated, utilized, prevPending)
+    const prevMetaPending = prevEntry?.metaPendingInWallet ?? 0
+    const prevGooglePending = prevEntry?.googlePendingInWallet ?? 0
+
+    const metaAllocated = input.metaAllocated ?? 0
+    const metaUtilized = input.metaUtilized ?? 0
+    const metaPendingInWallet = calculatePendingInWallet(metaAllocated, metaUtilized, prevMetaPending)
+
+    const googleAllocated = input.googleAllocated ?? 0
+    const googleUtilized = input.googleUtilized ?? 0
+    const googlePendingInWallet = calculatePendingInWallet(googleAllocated, googleUtilized, prevGooglePending)
+
+    // Totals
+    const allocated = metaAllocated + googleAllocated
+    const utilized = metaUtilized + googleUtilized
+    const pendingInWallet = metaPendingInWallet + googlePendingInWallet
+
     const created = await db.mediaSpend.create({
       data: {
         recordType: input.recordType,
         recordCode: input.recordCode,
         month: input.month,
+        metaAllocated,
+        metaUtilized,
+        metaPendingInWallet,
+        googleAllocated,
+        googleUtilized,
+        googlePendingInWallet,
         allocated,
         utilized,
         pendingInWallet,

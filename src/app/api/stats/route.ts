@@ -13,7 +13,18 @@ export async function GET() {
           select: { state: true, region: true, country: true, isLive: true },
         }),
         db.mediaSpend.findMany({
-          select: { month: true, allocated: true, utilized: true, pendingInWallet: true },
+          select: {
+            month: true,
+            allocated: true,
+            utilized: true,
+            pendingInWallet: true,
+            metaAllocated: true,
+            metaUtilized: true,
+            metaPendingInWallet: true,
+            googleAllocated: true,
+            googleUtilized: true,
+            googlePendingInWallet: true,
+          },
         }),
         db.platformFee.findMany({
           select: { month: true, totalAmount: true, paymentStatus: true, amountPaid: true },
@@ -56,10 +67,22 @@ export async function GET() {
     let msTotalAllocated = 0
     let msTotalUtilized = 0
     let msTotalPending = 0
+    let msMetaAllocated = 0
+    let msMetaUtilized = 0
+    let msMetaPending = 0
+    let msGoogleAllocated = 0
+    let msGoogleUtilized = 0
+    let msGooglePending = 0
     for (const m of mediaSpends) {
       msTotalAllocated += m.allocated
       msTotalUtilized += m.utilized
       msTotalPending += m.pendingInWallet
+      msMetaAllocated += m.metaAllocated
+      msMetaUtilized += m.metaUtilized
+      msMetaPending += m.metaPendingInWallet
+      msGoogleAllocated += m.googleAllocated
+      msGoogleUtilized += m.googleUtilized
+      msGooglePending += m.googlePendingInWallet
       const cur = msByMonth.get(m.month) ?? { allocated: 0, utilized: 0, pending: 0 }
       cur.allocated += m.allocated
       cur.utilized += m.utilized
@@ -126,6 +149,12 @@ export async function GET() {
         totalAllocated: msTotalAllocated,
         totalUtilized: msTotalUtilized,
         totalPending: msTotalPending,
+        metaAllocated: msMetaAllocated,
+        metaUtilized: msMetaUtilized,
+        metaPending: msMetaPending,
+        googleAllocated: msGoogleAllocated,
+        googleUtilized: msGoogleUtilized,
+        googlePending: msGooglePending,
         byMonth: msByMonthArr,
       },
       platformFees: {

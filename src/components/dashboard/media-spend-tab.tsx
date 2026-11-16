@@ -67,6 +67,8 @@ import {
   TrendingDown,
   PiggyBank,
   Upload,
+  Facebook,
+  Chrome,
 } from 'lucide-react'
 import { useToast } from '@/hooks/use-toast'
 import {
@@ -84,6 +86,11 @@ import { FinanceImportDialog } from './finance-import-dialog'
 
 const PAGE_SIZE_OPTIONS = [10, 25, 50, 100]
 
+// Meta = Facebook blue, Google = Google red, Total = neutral emerald
+const META_ACCENT = 'bg-blue-500/10 text-blue-600'
+const GOOGLE_ACCENT = 'bg-red-500/10 text-red-600'
+const TOTAL_ACCENT = 'bg-emerald-500/10 text-emerald-600'
+
 export function MediaSpendTab({ refreshKey }: { refreshKey: number }) {
   const { toast } = useToast()
   const [search, setSearch] = useState('')
@@ -91,10 +98,15 @@ export function MediaSpendTab({ refreshKey }: { refreshKey: number }) {
   const [page, setPage] = useState(1)
   const [pageSize, setPageSize] = useState(10)
   const [monthFilter, setMonthFilter] = useState('')
-  const [typeFilter, setTypeFilter] = useState<'' | RecordType>('')
   const [loading, setLoading] = useState(true)
   const [data, setData] = useState<{ data: MediaSpend[]; total: number; totalPages: number } | null>(null)
   const [summary, setSummary] = useState<{
+    metaAllocated: number
+    metaUtilized: number
+    metaPending: number
+    googleAllocated: number
+    googleUtilized: number
+    googlePending: number
     totalAllocated: number
     totalUtilized: number
     totalPending: number
@@ -127,7 +139,6 @@ export function MediaSpendTab({ refreshKey }: { refreshKey: number }) {
         pageSize,
         search: debouncedSearch,
         month: monthFilter,
-        recordType: typeFilter || undefined,
       })
       setData({
         data: res.data,
@@ -144,7 +155,7 @@ export function MediaSpendTab({ refreshKey }: { refreshKey: number }) {
     } finally {
       setLoading(false)
     }
-  }, [page, pageSize, debouncedSearch, monthFilter, typeFilter, toast])
+  }, [page, pageSize, debouncedSearch, monthFilter, toast])
 
   useEffect(() => {
     fetchData()
@@ -163,10 +174,17 @@ export function MediaSpendTab({ refreshKey }: { refreshKey: number }) {
     getStats()
       .then((s) => {
         if (!cancelled) {
+          const ms = s.mediaSpend
           setSummary({
-            totalAllocated: s.mediaSpend.totalAllocated,
-            totalUtilized: s.mediaSpend.totalUtilized,
-            totalPending: s.mediaSpend.totalPending,
+            metaAllocated: ms.metaAllocated ?? 0,
+            metaUtilized: ms.metaUtilized ?? 0,
+            metaPending: ms.metaPending ?? 0,
+            googleAllocated: ms.googleAllocated ?? 0,
+            googleUtilized: ms.googleUtilized ?? 0,
+            googlePending: ms.googlePending ?? 0,
+            totalAllocated: ms.totalAllocated ?? 0,
+            totalUtilized: ms.totalUtilized ?? 0,
+            totalPending: ms.totalPending ?? 0,
           })
           setStatsLoadedKey(statsKey)
         }
@@ -191,14 +209,13 @@ export function MediaSpendTab({ refreshKey }: { refreshKey: number }) {
 
   async function handleSubmit(values: Record<string, string | null>) {
     const payload = {
-      recordType: (values.recordType as RecordType) || 'SI',
+      recordType: (values.recordType as RecordType) || 'Spotlight',
       recordCode: values.recordCode ?? '',
       month: values.month ?? currentMonth(),
-      allocated: values.allocated ? parseFloat(values.allocated) : 0,
-      utilized: values.utilized ? parseFloat(values.utilized) : 0,
-      pendingInWallet: values.pendingInWallet
-        ? parseFloat(values.pendingInWallet)
-        : 0,
+      metaAllocated: values.metaAllocated ? parseFloat(values.metaAllocated) : 0,
+      metaUtilized: values.metaUtilized ? parseFloat(values.metaUtilized) : 0,
+      googleAllocated: values.googleAllocated ? parseFloat(values.googleAllocated) : 0,
+      googleUtilized: values.googleUtilized ? parseFloat(values.googleUtilized) : 0,
       notes: values.notes ?? null,
     }
     if (!payload.recordCode || !payload.month) {
@@ -241,7 +258,6 @@ export function MediaSpendTab({ refreshKey }: { refreshKey: number }) {
       const res = await exportMediaSpend({
         search: debouncedSearch,
         month: monthFilter,
-        recordType: typeFilter || undefined,
       })
       downloadCSV(res.data, 'media-spend.csv')
       toast({ title: 'Exported', description: 'CSV downloaded' })
@@ -269,8 +285,8 @@ export function MediaSpendTab({ refreshKey }: { refreshKey: number }) {
         <div>
           <h2 className="text-xl font-semibold tracking-tight">Media Spend</h2>
           <p className="text-sm text-muted-foreground mt-0.5">
-            Track monthly media spend per location - allocated budget, utilized
-            amount, and wallet balance carried forward.
+            Track monthly Meta and Google ad spend per location - allocated
+            budget, utilized amount, and wallet balance carried forward.
           </p>
         </div>
         <div className="flex flex-wrap items-center gap-2">
@@ -303,29 +319,100 @@ export function MediaSpendTab({ refreshKey }: { refreshKey: number }) {
         </div>
       </div>
 
-      {/* Summary cards */}
-      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-        <SummaryCard
-          title="Total Allocated"
-          value={summary?.totalAllocated ?? 0}
-          icon={<Wallet className="h-5 w-5" />}
-          accent="bg-emerald-500/10 text-emerald-600"
-          loading={statsLoading}
-        />
-        <SummaryCard
-          title="Total Utilized"
-          value={summary?.totalUtilized ?? 0}
-          icon={<TrendingDown className="h-5 w-5" />}
-          accent="bg-amber-500/10 text-amber-600"
-          loading={statsLoading}
-        />
-        <SummaryCard
-          title="Pending in Wallet"
-          value={summary?.totalPending ?? 0}
-          icon={<PiggyBank className="h-5 w-5" />}
-          accent="bg-violet-500/10 text-violet-600"
-          loading={statsLoading}
-        />
+      {/* Summary cards: Meta / Google / Total */}
+      <div className="space-y-4">
+        {/* Meta row */}
+        <div className="space-y-1.5">
+          <div className="flex items-center gap-1.5 text-xs font-semibold text-blue-700">
+            <Facebook className="h-3.5 w-3.5" />
+            <span>META</span>
+          </div>
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+            <SummaryCard
+              title="Meta Allocated"
+              value={summary?.metaAllocated ?? 0}
+              icon={<Wallet className="h-5 w-5" />}
+              accent={META_ACCENT}
+              loading={statsLoading}
+            />
+            <SummaryCard
+              title="Meta Utilized"
+              value={summary?.metaUtilized ?? 0}
+              icon={<TrendingDown className="h-5 w-5" />}
+              accent={META_ACCENT}
+              loading={statsLoading}
+            />
+            <SummaryCard
+              title="Meta Pending Wallet"
+              value={summary?.metaPending ?? 0}
+              icon={<PiggyBank className="h-5 w-5" />}
+              accent={META_ACCENT}
+              loading={statsLoading}
+            />
+          </div>
+        </div>
+
+        {/* Google row */}
+        <div className="space-y-1.5">
+          <div className="flex items-center gap-1.5 text-xs font-semibold text-red-700">
+            <Chrome className="h-3.5 w-3.5" />
+            <span>GOOGLE</span>
+          </div>
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+            <SummaryCard
+              title="Google Allocated"
+              value={summary?.googleAllocated ?? 0}
+              icon={<Wallet className="h-5 w-5" />}
+              accent={GOOGLE_ACCENT}
+              loading={statsLoading}
+            />
+            <SummaryCard
+              title="Google Utilized"
+              value={summary?.googleUtilized ?? 0}
+              icon={<TrendingDown className="h-5 w-5" />}
+              accent={GOOGLE_ACCENT}
+              loading={statsLoading}
+            />
+            <SummaryCard
+              title="Google Pending Wallet"
+              value={summary?.googlePending ?? 0}
+              icon={<PiggyBank className="h-5 w-5" />}
+              accent={GOOGLE_ACCENT}
+              loading={statsLoading}
+            />
+          </div>
+        </div>
+
+        {/* Total row */}
+        <div className="space-y-1.5">
+          <div className="flex items-center gap-1.5 text-xs font-semibold text-emerald-700">
+            <Wallet className="h-3.5 w-3.5" />
+            <span>TOTAL</span>
+          </div>
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+            <SummaryCard
+              title="Total Allocated"
+              value={summary?.totalAllocated ?? 0}
+              icon={<Wallet className="h-5 w-5" />}
+              accent={TOTAL_ACCENT}
+              loading={statsLoading}
+            />
+            <SummaryCard
+              title="Total Utilized"
+              value={summary?.totalUtilized ?? 0}
+              icon={<TrendingDown className="h-5 w-5" />}
+              accent={TOTAL_ACCENT}
+              loading={statsLoading}
+            />
+            <SummaryCard
+              title="Total Pending Wallet"
+              value={summary?.totalPending ?? 0}
+              icon={<PiggyBank className="h-5 w-5" />}
+              accent={TOTAL_ACCENT}
+              loading={statsLoading}
+            />
+          </div>
+        </div>
       </div>
 
       {/* Filters */}
@@ -333,7 +420,7 @@ export function MediaSpendTab({ refreshKey }: { refreshKey: number }) {
         <div className="relative flex-1 sm:min-w-[260px]">
           <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
           <Input
-            placeholder="Search by code or notes..."
+            placeholder="Search by location code or notes..."
             value={search}
             onChange={(e) => setSearch(e.target.value)}
             className="pl-9"
@@ -352,16 +439,6 @@ export function MediaSpendTab({ refreshKey }: { refreshKey: number }) {
             ))}
           </SelectContent>
         </Select>
-        <Select value={typeFilter || '__all__'} onValueChange={(v) => { setTypeFilter((v === '__all__' ? '' : v) as RecordType | ''); setPage(1) }}>
-          <SelectTrigger className="w-[140px]">
-            <SelectValue placeholder="Type" />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value="__all__">All Types</SelectItem>
-            <SelectItem value="SI">SI</SelectItem>
-            <SelectItem value="Spotlight">Spotlight</SelectItem>
-          </SelectContent>
-        </Select>
       </div>
 
       {/* Table */}
@@ -370,22 +447,51 @@ export function MediaSpendTab({ refreshKey }: { refreshKey: number }) {
           <Table>
             <TableHeader>
               <TableRow>
-                <TableHead className="whitespace-nowrap">Location</TableHead>
-                <TableHead className="whitespace-nowrap">Month</TableHead>
-                <TableHead className="text-right whitespace-nowrap">Allocated</TableHead>
-                <TableHead className="text-right whitespace-nowrap">Utilized</TableHead>
-                <TableHead className="text-right whitespace-nowrap">Pending in Wallet</TableHead>
-                <TableHead>Notes</TableHead>
-                <TableHead className="w-[60px] text-right">Actions</TableHead>
+                <TableHead rowSpan={2} className="whitespace-nowrap align-bottom">Location</TableHead>
+                <TableHead rowSpan={2} className="whitespace-nowrap align-bottom">Month</TableHead>
+                <TableHead colSpan={3} className="text-center border-l border-r border-blue-200 bg-blue-500/5 text-blue-700">
+                  <div className="flex items-center justify-center gap-1.5">
+                    <Facebook className="h-3.5 w-3.5" />
+                    <span>Meta</span>
+                  </div>
+                </TableHead>
+                <TableHead colSpan={3} className="text-center border-l border-r border-red-200 bg-red-500/5 text-red-700">
+                  <div className="flex items-center justify-center gap-1.5">
+                    <Chrome className="h-3.5 w-3.5" />
+                    <span>Google</span>
+                  </div>
+                </TableHead>
+                <TableHead colSpan={3} className="text-center border-l border-r bg-muted/60">
+                  <div className="flex items-center justify-center gap-1.5">
+                    <Wallet className="h-3.5 w-3.5" />
+                    <span>Total</span>
+                  </div>
+                </TableHead>
+                <TableHead rowSpan={2} className="whitespace-nowrap align-bottom">Notes</TableHead>
+                <TableHead rowSpan={2} className="w-[60px] text-right align-bottom">Actions</TableHead>
+              </TableRow>
+              <TableRow>
+                {/* Meta sub-columns */}
+                <TableHead className="text-right whitespace-nowrap bg-blue-500/5 text-blue-700 border-l border-blue-200">Allocated</TableHead>
+                <TableHead className="text-right whitespace-nowrap bg-blue-500/5 text-blue-700">Utilized</TableHead>
+                <TableHead className="text-right whitespace-nowrap bg-blue-500/5 text-blue-700 border-r border-blue-200">Pending</TableHead>
+                {/* Google sub-columns */}
+                <TableHead className="text-right whitespace-nowrap bg-red-500/5 text-red-700 border-l border-red-200">Allocated</TableHead>
+                <TableHead className="text-right whitespace-nowrap bg-red-500/5 text-red-700">Utilized</TableHead>
+                <TableHead className="text-right whitespace-nowrap bg-red-500/5 text-red-700 border-r border-red-200">Pending</TableHead>
+                {/* Total sub-columns */}
+                <TableHead className="text-right whitespace-nowrap bg-muted/60 border-l">Allocated</TableHead>
+                <TableHead className="text-right whitespace-nowrap bg-muted/60">Utilized</TableHead>
+                <TableHead className="text-right whitespace-nowrap bg-muted/60 border-r">Pending</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
               {loading ? (
                 Array.from({ length: 5 }).map((_, i) => (
                   <TableRow key={`s-${i}`}>
-                    {Array.from({ length: 7 }).map((_, j) => (
+                    {Array.from({ length: 13 }).map((_, j) => (
                       <TableCell key={j}>
-                        <Skeleton className="h-5 w-full max-w-[120px]" />
+                        <Skeleton className="h-5 w-full max-w-[100px]" />
                       </TableCell>
                     ))}
                   </TableRow>
@@ -411,13 +517,34 @@ export function MediaSpendTab({ refreshKey }: { refreshKey: number }) {
                       <TableCell className="whitespace-nowrap text-sm">
                         {formatMonth(row.month)}
                       </TableCell>
-                      <TableCell className="text-right whitespace-nowrap font-medium text-emerald-600">
+                      {/* Meta */}
+                      <TableCell className="text-right whitespace-nowrap text-blue-700 border-l border-blue-200/60">
+                        {formatCurrency(row.metaAllocated)}
+                      </TableCell>
+                      <TableCell className="text-right whitespace-nowrap text-blue-700">
+                        {formatCurrency(row.metaUtilized)}
+                      </TableCell>
+                      <TableCell className="text-right whitespace-nowrap font-medium text-blue-700 border-r border-blue-200/60">
+                        {formatCurrency(row.metaPendingInWallet)}
+                      </TableCell>
+                      {/* Google */}
+                      <TableCell className="text-right whitespace-nowrap text-red-700 border-l border-red-200/60">
+                        {formatCurrency(row.googleAllocated)}
+                      </TableCell>
+                      <TableCell className="text-right whitespace-nowrap text-red-700">
+                        {formatCurrency(row.googleUtilized)}
+                      </TableCell>
+                      <TableCell className="text-right whitespace-nowrap font-medium text-red-700 border-r border-red-200/60">
+                        {formatCurrency(row.googlePendingInWallet)}
+                      </TableCell>
+                      {/* Total */}
+                      <TableCell className="text-right whitespace-nowrap font-medium text-emerald-700 border-l">
                         {formatCurrency(row.allocated)}
                       </TableCell>
-                      <TableCell className="text-right whitespace-nowrap text-amber-600">
+                      <TableCell className="text-right whitespace-nowrap text-amber-700">
                         {formatCurrency(row.utilized)}
                       </TableCell>
-                      <TableCell className="text-right whitespace-nowrap">
+                      <TableCell className="text-right whitespace-nowrap border-r">
                         <div className="flex flex-col items-end">
                           <span className="font-semibold">
                             {formatCurrency(row.pendingInWallet)}
@@ -466,7 +593,7 @@ export function MediaSpendTab({ refreshKey }: { refreshKey: number }) {
               ) : (
                 <TableRow>
                   <TableCell
-                    colSpan={7}
+                    colSpan={13}
                     className="h-32 text-center text-muted-foreground"
                   >
                     No media spend records found. Add a new entry to get started.
@@ -557,14 +684,14 @@ export function MediaSpendTab({ refreshKey }: { refreshKey: number }) {
         open={importOpen}
         onOpenChange={setImportOpen}
         title="Import Media Spend"
-        description="Upload an Excel/CSV file with per-location per-month media budget. Each row matches a location + month and will be upserted."
+        description="Upload an Excel/CSV file with per-location per-month Meta + Google ad budget. Each row matches a location + month and will be upserted."
         expectedColumns={[
-          'Location Type',
           'Location Code',
           'Month',
-          'Allocated',
-          'Utilized',
-          'Pending in Wallet',
+          'Meta Allocated',
+          'Meta Utilized',
+          'Google Allocated',
+          'Google Utilized',
           'Notes',
         ]}
         onImportFile={importMediaSpendFile}
@@ -623,28 +750,35 @@ function MediaSpendForm({
   editing: MediaSpend | null
   onSubmit: (values: Record<string, string | null>) => Promise<void>
 }) {
-  const [recordType, setRecordType] = useState<RecordType>('SI')
+  const [recordType, setRecordType] = useState<RecordType>('Spotlight')
   const [recordCode, setRecordCode] = useState('')
   const [month, setMonth] = useState(currentMonth())
-  const [allocated, setAllocated] = useState('')
-  const [utilized, setUtilized] = useState('')
-  const [pendingInWallet, setPendingInWallet] = useState('')
+  const [metaAllocated, setMetaAllocated] = useState('')
+  const [metaUtilized, setMetaUtilized] = useState('')
+  const [googleAllocated, setGoogleAllocated] = useState('')
+  const [googleUtilized, setGoogleUtilized] = useState('')
   const [notes, setNotes] = useState('')
   const [submitting, setSubmitting] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
   useEffect(() => {
     if (open) {
-      setRecordType(editing?.recordType ?? 'SI')
+      setRecordType(editing?.recordType ?? 'Spotlight')
       setRecordCode(editing?.recordCode ?? '')
       setMonth(editing?.month ?? currentMonth())
-      setAllocated(editing ? String(editing.allocated) : '')
-      setUtilized(editing ? String(editing.utilized) : '')
-      setPendingInWallet(editing ? String(editing.pendingInWallet) : '')
+      setMetaAllocated(editing ? String(editing.metaAllocated) : '')
+      setMetaUtilized(editing ? String(editing.metaUtilized) : '')
+      setGoogleAllocated(editing ? String(editing.googleAllocated) : '')
+      setGoogleUtilized(editing ? String(editing.googleUtilized) : '')
       setNotes(editing?.notes ?? '')
       setError(null)
     }
   }, [open, editing])
+
+  // Live preview of pending = allocated - utilized (excludes prev. month balance
+  // which is added by the backend automatically)
+  const metaPreview = (parseFloat(metaAllocated) || 0) - (parseFloat(metaUtilized) || 0)
+  const googlePreview = (parseFloat(googleAllocated) || 0) - (parseFloat(googleUtilized) || 0)
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault()
@@ -659,9 +793,10 @@ function MediaSpendForm({
         recordType,
         recordCode,
         month,
-        allocated: allocated || null,
-        utilized: utilized || null,
-        pendingInWallet: pendingInWallet || null,
+        metaAllocated: metaAllocated || null,
+        metaUtilized: metaUtilized || null,
+        googleAllocated: googleAllocated || null,
+        googleUtilized: googleUtilized || null,
         notes: notes || null,
       })
       onOpenChange(false)
@@ -674,14 +809,15 @@ function MediaSpendForm({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-lg">
+      <DialogContent className="sm:max-w-xl">
         <DialogHeader>
           <DialogTitle>
             {editing ? 'Edit Media Spend Entry' : 'Add Media Spend Entry'}
           </DialogTitle>
           <DialogDescription>
-            Track allocated budget, utilized amount, and wallet balance for a
-            location in a specific month.
+            Track Meta and Google ad spend for a location in a specific month.
+            Wallet balances are auto-calculated from the previous month&apos;s
+            record.
           </DialogDescription>
         </DialogHeader>
         <form onSubmit={handleSubmit} className="space-y-4">
@@ -725,49 +861,105 @@ function MediaSpendForm({
               placeholder={recordType === 'SI' ? '10001' : 'PU09A'}
             />
           </div>
-          <div className="grid grid-cols-3 gap-4">
-            <div className="space-y-1.5">
-              <Label htmlFor="allocated" className="text-xs font-medium">Allocated (INR)</Label>
-              <Input
-                id="allocated"
-                type="number"
-                step="any"
-                value={allocated}
-                onChange={(e) => setAllocated(e.target.value)}
-                placeholder="0"
-              />
+
+          {/* Meta section */}
+          <div className="rounded-lg border border-blue-200 bg-blue-500/5 p-3 space-y-3">
+            <div className="flex items-center gap-2 text-blue-700">
+              <Facebook className="h-4 w-4" />
+              <span className="text-sm font-semibold">Meta (Facebook Ads)</span>
             </div>
-            <div className="space-y-1.5">
-              <Label htmlFor="utilized" className="text-xs font-medium">Utilized (INR)</Label>
-              <Input
-                id="utilized"
-                type="number"
-                step="any"
-                value={utilized}
-                onChange={(e) => setUtilized(e.target.value)}
-                placeholder="0"
-              />
+            <div className="grid grid-cols-2 gap-3">
+              <div className="space-y-1.5">
+                <Label htmlFor="metaAllocated" className="text-xs font-medium">
+                  Meta Allocated (INR)
+                </Label>
+                <Input
+                  id="metaAllocated"
+                  type="number"
+                  step="any"
+                  min="0"
+                  value={metaAllocated}
+                  onChange={(e) => setMetaAllocated(e.target.value)}
+                  placeholder="0"
+                />
+              </div>
+              <div className="space-y-1.5">
+                <Label htmlFor="metaUtilized" className="text-xs font-medium">
+                  Meta Utilized (INR)
+                </Label>
+                <Input
+                  id="metaUtilized"
+                  type="number"
+                  step="any"
+                  min="0"
+                  value={metaUtilized}
+                  onChange={(e) => setMetaUtilized(e.target.value)}
+                  placeholder="0"
+                />
+              </div>
             </div>
-            <div className="space-y-1.5">
-              <Label htmlFor="pending" className="text-xs font-medium">
-                Pending in Wallet{' '}
-                <span className="text-muted-foreground font-normal">(auto)</span>
-              </Label>
-              <Input
-                id="pending"
-                type="number"
-                step="any"
-                value={pendingInWallet}
-                onChange={(e) => setPendingInWallet(e.target.value)}
-                placeholder="0"
-                disabled
-                className="bg-muted/50"
-              />
-              <p className="text-[10px] text-muted-foreground">
-                = Allocated + Prev. pending − Utilized
-              </p>
+            <div className="flex items-center justify-between rounded-md bg-blue-500/10 px-2.5 py-1.5">
+              <span className="text-[11px] font-medium text-blue-700">
+                Meta Pending Wallet (auto)
+              </span>
+              <span className="text-xs text-blue-700">
+                <span className="font-semibold">{formatCurrency(metaPreview)}</span>
+                <span className="ml-2 text-[10px] text-muted-foreground">
+                  = alloc + prev − util
+                </span>
+              </span>
             </div>
           </div>
+
+          {/* Google section */}
+          <div className="rounded-lg border border-red-200 bg-red-500/5 p-3 space-y-3">
+            <div className="flex items-center gap-2 text-red-700">
+              <Chrome className="h-4 w-4" />
+              <span className="text-sm font-semibold">Google Ads</span>
+            </div>
+            <div className="grid grid-cols-2 gap-3">
+              <div className="space-y-1.5">
+                <Label htmlFor="googleAllocated" className="text-xs font-medium">
+                  Google Allocated (INR)
+                </Label>
+                <Input
+                  id="googleAllocated"
+                  type="number"
+                  step="any"
+                  min="0"
+                  value={googleAllocated}
+                  onChange={(e) => setGoogleAllocated(e.target.value)}
+                  placeholder="0"
+                />
+              </div>
+              <div className="space-y-1.5">
+                <Label htmlFor="googleUtilized" className="text-xs font-medium">
+                  Google Utilized (INR)
+                </Label>
+                <Input
+                  id="googleUtilized"
+                  type="number"
+                  step="any"
+                  min="0"
+                  value={googleUtilized}
+                  onChange={(e) => setGoogleUtilized(e.target.value)}
+                  placeholder="0"
+                />
+              </div>
+            </div>
+            <div className="flex items-center justify-between rounded-md bg-red-500/10 px-2.5 py-1.5">
+              <span className="text-[11px] font-medium text-red-700">
+                Google Pending Wallet (auto)
+              </span>
+              <span className="text-xs text-red-700">
+                <span className="font-semibold">{formatCurrency(googlePreview)}</span>
+                <span className="ml-2 text-[10px] text-muted-foreground">
+                  = alloc + prev − util
+                </span>
+              </span>
+            </div>
+          </div>
+
           <div className="space-y-1.5">
             <Label htmlFor="notes" className="text-xs font-medium">Notes</Label>
             <Textarea
@@ -803,9 +995,15 @@ function downloadCSV(rows: MediaSpend[], filename: string) {
     'Location Type',
     'Location Code',
     'Month',
-    'Allocated',
-    'Utilized',
-    'Pending in Wallet',
+    'Meta Allocated',
+    'Meta Utilized',
+    'Meta Pending in Wallet',
+    'Google Allocated',
+    'Google Utilized',
+    'Google Pending in Wallet',
+    'Total Allocated',
+    'Total Utilized',
+    'Total Pending in Wallet',
     'Notes',
   ]
   const escape = (v: unknown) => {
@@ -821,6 +1019,12 @@ function downloadCSV(rows: MediaSpend[], filename: string) {
         r.recordType,
         r.recordCode,
         r.month,
+        r.metaAllocated,
+        r.metaUtilized,
+        r.metaPendingInWallet,
+        r.googleAllocated,
+        r.googleUtilized,
+        r.googlePendingInWallet,
         r.allocated,
         r.utilized,
         r.pendingInWallet,
@@ -841,17 +1045,17 @@ function downloadCSV(rows: MediaSpend[], filename: string) {
 
 function downloadMediaSpendTemplate() {
   const headers = [
-    'Location Type',
     'Location Code',
     'Month',
-    'Allocated',
-    'Utilized',
-    'Pending in Wallet',
+    'Meta Allocated',
+    'Meta Utilized',
+    'Google Allocated',
+    'Google Utilized',
     'Notes',
   ]
   const sample = [
-    'SI,10001,2025-01,50000,32000,18000,Jan campaign',
-    'Spotlight,PU09A,2025-01,30000,28000,2000,',
+    'PU09A,2025-01,25000,18000,15000,12000,Jan campaigns',
+    'PU10B,2025-01,30000,22000,10000,8000,',
   ]
   const csv = [headers.join(','), ...sample].join('\n')
   const blob = new Blob([csv], { type: 'text/csv;charset=utf-8' })

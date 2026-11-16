@@ -103,15 +103,24 @@ model SpotlightRecord {
   @@index([isLive])
 }
 
-// Media Spend - per location per month
+// Media Spend - per Spotlight location per month, bifurcated by platform (Meta + Google)
 model MediaSpend {
-  id              String   @id @default(cuid())
-  recordType      String   // "SI" or "Spotlight"
-  recordCode      String   // siCode (SI) or clientCode (Spotlight)
-  month           String   // "YYYY-MM"
-  allocated       Float    @default(0) // budget added to wallet that month
-  utilized        Float    @default(0) // amount spent that month
-  pendingInWallet Float    @default(0) // balance carried to next month
+  id                  String   @id @default(cuid())
+  recordType          String   // "Spotlight" (media spend is only for Spotlight)
+  recordCode          String   // clientCode (Spotlight)
+  month               String   // "YYYY-MM"
+  // Meta (Facebook/Instagram ads)
+  metaAllocated       Float    @default(0) // Meta budget added to wallet that month
+  metaUtilized        Float    @default(0) // Meta amount spent that month
+  metaPendingInWallet Float    @default(0) // Meta balance carried to next month
+  // Google (Google Ads)
+  googleAllocated       Float    @default(0) // Google budget added to wallet that month
+  googleUtilized        Float    @default(0) // Google amount spent that month
+  googlePendingInWallet Float    @default(0) // Google balance carried to next month
+  // Computed totals (auto-calculated: meta + google)
+  allocated       Float    @default(0) // total budget = metaAllocated + googleAllocated
+  utilized        Float    @default(0) // total spent = metaUtilized + googleUtilized
+  pendingInWallet Float    @default(0) // total pending = metaPending + googlePending
   notes           String?
   createdAt       DateTime @default(now())
   updatedAt       DateTime @updatedAt

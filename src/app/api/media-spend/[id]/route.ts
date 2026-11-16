@@ -10,12 +10,13 @@ function parseNum(v: unknown, def = 0): number {
 
 function buildInput(body: Partial<MediaSpendInput>): MediaSpendInput {
   return {
-    recordType: (body.recordType as RecordType) ?? 'SI',
+    recordType: 'Spotlight' as RecordType,
     recordCode: (body.recordCode ?? '').trim(),
     month: (body.month ?? '').trim(),
-    allocated: parseNum(body.allocated, 0),
-    utilized: parseNum(body.utilized, 0),
-    pendingInWallet: parseNum(body.pendingInWallet, 0),
+    metaAllocated: parseNum(body.metaAllocated, 0),
+    metaUtilized: parseNum(body.metaUtilized, 0),
+    googleAllocated: parseNum(body.googleAllocated, 0),
+    googleUtilized: parseNum(body.googleUtilized, 0),
     notes: body.notes ? String(body.notes).trim() : null,
   }
 }
@@ -50,12 +51,6 @@ export async function PUT(
         { status: 400 }
       )
     }
-    if (body.recordType !== 'SI' && body.recordType !== 'Spotlight') {
-      return NextResponse.json(
-        { error: 'recordType must be SI or Spotlight' },
-        { status: 400 }
-      )
-    }
     const input = buildInput(body)
     const existing = await db.mediaSpend.findUnique({ where: { id } })
     if (!existing) {
@@ -79,13 +74,13 @@ export async function PUT(
       if (conflict) {
         return NextResponse.json(
           {
-            error: `Media spend for ${input.recordType} ${input.recordCode} in ${input.month} already exists`,
+            error: `Media spend for ${input.recordCode} in ${input.month} already exists`,
           },
           { status: 409 }
         )
       }
     }
-    // Auto-calculate pendingInWallet = allocated + previousMonth.pendingInWallet - utilized
+    // Auto-calculate pendingInWallet for both Meta and Google
     const prevMonth = previousMonth(input.month)
     const prevEntry = await db.mediaSpend.findUnique({
       where: {
@@ -95,18 +90,35 @@ export async function PUT(
           month: prevMonth,
         },
       },
-      select: { pendingInWallet: true },
+      select: { metaPendingInWallet: true, googlePendingInWallet: true },
     })
-    const prevPending = prevEntry?.pendingInWallet ?? 0
-    const allocated = input.allocated ?? 0
-    const utilized = input.utilized ?? 0
-    const pendingInWallet = calculatePendingInWallet(allocated, utilized, prevPending)
+    const prevMetaPending = prevEntry?.metaPendingInWallet ?? 0
+    const prevGooglePending = prevEntry?.googlePendingInWallet ?? 0
+
+    const metaAllocated = input.metaAllocated ?? 0
+    const metaUtilized = input.metaUtilized ?? 0
+    const metaPendingInWallet = calculatePendingInWallet(metaAllocated, metaUtilized, prevMetaPending)
+
+    const googleAllocated = input.googleAllocated ?? 0
+    const googleUtilized = input.googleUtilized ?? 0
+    const googlePendingInWallet = calculatePendingInWallet(googleAllocated, googleUtilized, prevGooglePending)
+
+    const allocated = metaAllocated + googleAllocated
+    const utilized = metaUtilized + googleUtilized
+    const pendingInWallet = metaPendingInWallet + googlePendingInWallet
+
     const updated = await db.mediaSpend.update({
       where: { id },
       data: {
         recordType: input.recordType,
         recordCode: input.recordCode,
         month: input.month,
+        metaAllocated,
+        metaUtilized,
+        metaPendingInWallet,
+        googleAllocated,
+        googleUtilized,
+        googlePendingInWallet,
         allocated,
         utilized,
         pendingInWallet,

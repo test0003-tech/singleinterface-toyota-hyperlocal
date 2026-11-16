@@ -8,9 +8,10 @@ interface ImportRow {
   recordType: string
   recordCode: string
   month: string
-  allocated: number
-  utilized: number
-  pendingInWallet: number
+  metaAllocated: number
+  metaUtilized: number
+  googleAllocated: number
+  googleUtilized: number
   notes: string | null
 }
 
@@ -72,26 +73,32 @@ function rowsFromSheet(
 ): ImportRow[] {
   const out: ImportRow[] = []
   for (const row of rows) {
-    // Try multiple possible header names
-    const recordType =
-      normalizeType(row['Location Type'] ?? row['Type'] ?? row['Record Type'] ?? row['type']) ??
-      (row['recordType'] ? normalizeType(row['recordType']) : null)
     const recordCode =
-      cleanStr(row['Location Code'] ?? row['Code'] ?? row['Record Code'] ?? row['recordCode'] ?? row['SI Code'] ?? row['Client Code'])
+      cleanStr(row['Location Code'] ?? row['Code'] ?? row['Record Code'] ?? row['recordCode'] ?? row['Client Code'] ?? row['Spotlight Code'])
     const month = normalizeMonth(row['Month'] ?? row['month'])
-    const allocated = parseNum(row['Allocated'] ?? row['Allocated Budget'] ?? row['allocated'] ?? row['Budget'])
-    const utilized = parseNum(row['Utilized'] ?? row['utilized'] ?? row['Spent'])
-    const pendingInWallet = parseNum(
-      row['Pending in Wallet'] ?? row['Pending'] ?? row['pendingInWallet'] ?? row['Wallet Balance'] ?? row['Balance']
+    // Meta fields
+    const metaAllocated = parseNum(
+      row['Meta Allocated'] ?? row['Meta Budget'] ?? row['metaAllocated'] ?? row['Meta Allocated Budget']
+    )
+    const metaUtilized = parseNum(
+      row['Meta Utilized'] ?? row['Meta Spent'] ?? row['metaUtilized'] ?? row['Meta Spend']
+    )
+    // Google fields
+    const googleAllocated = parseNum(
+      row['Google Allocated'] ?? row['Google Budget'] ?? row['googleAllocated'] ?? row['Google Allocated Budget']
+    )
+    const googleUtilized = parseNum(
+      row['Google Utilized'] ?? row['Google Spent'] ?? row['googleUtilized'] ?? row['Google Spend']
     )
     const notes = cleanStr(row['Notes'] ?? row['notes'])
     out.push({
-      recordType: recordType ?? '',
+      recordType: 'Spotlight',
       recordCode: recordCode ?? '',
       month: month ?? '',
-      allocated,
-      utilized,
-      pendingInWallet,
+      metaAllocated,
+      metaUtilized,
+      googleAllocated,
+      googleUtilized,
       notes,
     })
   }
@@ -175,28 +182,24 @@ export async function POST(req: NextRequest) {
     // calculating the current month's pendingInWallet.
     const sortedRows = [...rows].sort((a, b) => a.month.localeCompare(b.month))
 
-    // Track pendingInWallet per location+month for in-batch lookups
-    const pendingCache = new Map<string, number>()
+    // Track pendingInWallet per location+month+platform for in-batch lookups
+    const metaPendingCache = new Map<string, number>()
+    const googlePendingCache = new Map<string, number>()
 
     for (const row of sortedRows) {
-      const rt = row.recordType as RecordType
-      if (rt !== 'SI' && rt !== 'Spotlight') {
-        result.skipped++
-        continue
-      }
       if (!row.recordCode || !row.month) {
         result.skipped++
         continue
       }
       try {
+        const rt = 'Spotlight' as RecordType
         const cacheKey = `${rt}:${row.recordCode}:${row.month}`
         const prevMonthStr = previousMonth(row.month)
         const prevCacheKey = `${rt}:${row.recordCode}:${prevMonthStr}`
 
-        // Look up previous month's pendingInWallet: first from the in-batch
-        // cache, then from the database.
-        let prevPending = pendingCache.get(prevCacheKey)
-        if (prevPending === undefined) {
+        // Meta pending lookup
+        let prevMetaPending = metaPendingCache.get(prevCacheKey)
+        if (prevMetaPending === undefined) {
           const prevEntry = await db.mediaSpend.findUnique({
             where: {
               recordType_recordCode_month: {
@@ -205,27 +208,54 @@ export async function POST(req: NextRequest) {
                 month: prevMonthStr,
               },
             },
-            select: { pendingInWallet: true },
+            select: { metaPendingInWallet: true },
           })
-          prevPending = prevEntry?.pendingInWallet ?? 0
+          prevMetaPending = prevEntry?.metaPendingInWallet ?? 0
         }
 
-        const allocated = row.allocated
-        const utilized = row.utilized
-        // Auto-calculate: pendingInWallet = allocated + prevPending - utilized
-        const pendingInWallet = calculatePendingInWallet(
-          allocated,
-          utilized,
-          prevPending
-        )
+        // Google pending lookup
+        let prevGooglePending = googlePendingCache.get(prevCacheKey)
+        if (prevGooglePending === undefined) {
+          const prevEntry = await db.mediaSpend.findUnique({
+            where: {
+              recordType_recordCode_month: {
+                recordType: rt,
+                recordCode: row.recordCode,
+                month: prevMonthStr,
+              },
+            },
+            select: { googlePendingInWallet: true },
+          })
+          prevGooglePending = prevEntry?.googlePendingInWallet ?? 0
+        }
 
-        // Store in cache for subsequent months in this batch
-        pendingCache.set(cacheKey, pendingInWallet)
+        const metaAllocated = row.metaAllocated
+        const metaUtilized = row.metaUtilized
+        const metaPendingInWallet = calculatePendingInWallet(metaAllocated, metaUtilized, prevMetaPending)
+
+        const googleAllocated = row.googleAllocated
+        const googleUtilized = row.googleUtilized
+        const googlePendingInWallet = calculatePendingInWallet(googleAllocated, googleUtilized, prevGooglePending)
+
+        // Totals
+        const allocated = metaAllocated + googleAllocated
+        const utilized = metaUtilized + googleUtilized
+        const pendingInWallet = metaPendingInWallet + googlePendingInWallet
+
+        // Store in caches for subsequent months in this batch
+        metaPendingCache.set(cacheKey, metaPendingInWallet)
+        googlePendingCache.set(cacheKey, googlePendingInWallet)
 
         const data = {
           recordType: rt,
           recordCode: row.recordCode,
           month: row.month,
+          metaAllocated,
+          metaUtilized,
+          metaPendingInWallet,
+          googleAllocated,
+          googleUtilized,
+          googlePendingInWallet,
           allocated,
           utilized,
           pendingInWallet,

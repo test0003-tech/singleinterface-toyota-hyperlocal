@@ -90,6 +90,22 @@ function getFieldFromItem(item: EvalItem, field: string): unknown {
     }
     return 0
   }
+  if (field === 'metaUtilizationPercent') {
+    const allocated = item.fields.metaAllocated
+    const utilized = item.fields.metaUtilized
+    if (typeof allocated === 'number' && typeof utilized === 'number' && allocated > 0) {
+      return (utilized / allocated) * 100
+    }
+    return 0
+  }
+  if (field === 'googleUtilizationPercent') {
+    const allocated = item.fields.googleAllocated
+    const utilized = item.fields.googleUtilized
+    if (typeof allocated === 'number' && typeof utilized === 'number' && allocated > 0) {
+      return (utilized / allocated) * 100
+    }
+    return 0
+  }
   return item.fields[field]
 }
 
@@ -165,6 +181,12 @@ async function fetchItemsForRule(rule: Rule): Promise<EvalItem[]> {
       select: {
         recordType: true,
         recordCode: true,
+        metaAllocated: true,
+        metaUtilized: true,
+        metaPendingInWallet: true,
+        googleAllocated: true,
+        googleUtilized: true,
+        googlePendingInWallet: true,
         allocated: true,
         utilized: true,
         pendingInWallet: true,
@@ -180,6 +202,12 @@ async function fetchItemsForRule(rule: Rule): Promise<EvalItem[]> {
           allocated: r.allocated,
           utilized: r.utilized,
           pendingInWallet: r.pendingInWallet,
+          metaAllocated: r.metaAllocated,
+          metaUtilized: r.metaUtilized,
+          metaPendingInWallet: r.metaPendingInWallet,
+          googleAllocated: r.googleAllocated,
+          googleUtilized: r.googleUtilized,
+          googlePendingInWallet: r.googlePendingInWallet,
           month: r.month,
         },
       })
@@ -334,6 +362,50 @@ export async function seedDefaultRules(): Promise<void> {
       description: 'Critical alert when media spend reaches or exceeds 100% of allocated budget',
       targetType: 'MediaSpend',
       field: 'utilizationPercent',
+      operator: 'greater_or_equal',
+      value: '100',
+      severity: 'critical',
+      scopeMonth: true,
+      isEnabled: true,
+    },
+    {
+      name: 'Meta ads over 90% utilized',
+      description: 'Warning when Meta (Facebook) ad spend exceeds 90% of allocated budget',
+      targetType: 'MediaSpend',
+      field: 'metaUtilizationPercent',
+      operator: 'greater_than',
+      value: '90',
+      severity: 'warning',
+      scopeMonth: true,
+      isEnabled: true,
+    },
+    {
+      name: 'Google ads over 90% utilized',
+      description: 'Warning when Google ad spend exceeds 90% of allocated budget',
+      targetType: 'MediaSpend',
+      field: 'googleUtilizationPercent',
+      operator: 'greater_than',
+      value: '90',
+      severity: 'warning',
+      scopeMonth: true,
+      isEnabled: true,
+    },
+    {
+      name: 'Meta ads budget exhausted',
+      description: 'Critical alert when Meta ad spend reaches 100% of allocated budget',
+      targetType: 'MediaSpend',
+      field: 'metaUtilizationPercent',
+      operator: 'greater_or_equal',
+      value: '100',
+      severity: 'critical',
+      scopeMonth: true,
+      isEnabled: true,
+    },
+    {
+      name: 'Google ads budget exhausted',
+      description: 'Critical alert when Google ad spend reaches 100% of allocated budget',
+      targetType: 'MediaSpend',
+      field: 'googleUtilizationPercent',
       operator: 'greater_or_equal',
       value: '100',
       severity: 'critical',

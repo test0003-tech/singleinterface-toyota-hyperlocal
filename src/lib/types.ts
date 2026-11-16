@@ -141,6 +141,14 @@ export interface DashboardStats {
     totalAllocated: number;
     totalUtilized: number;
     totalPending: number;
+    // Meta breakdown
+    metaAllocated: number;
+    metaUtilized: number;
+    metaPending: number;
+    // Google breakdown
+    googleAllocated: number;
+    googleUtilized: number;
+    googlePending: number;
     byMonth: { month: string; allocated: number; utilized: number; pending: number }[];
   };
   platformFees: {
@@ -160,6 +168,15 @@ export interface MediaSpend {
   recordType: RecordType;
   recordCode: string;
   month: string;
+  // Meta
+  metaAllocated: number;
+  metaUtilized: number;
+  metaPendingInWallet: number;
+  // Google
+  googleAllocated: number;
+  googleUtilized: number;
+  googlePendingInWallet: number;
+  // Totals (auto-computed)
   allocated: number;
   utilized: number;
   pendingInWallet: number;
@@ -172,9 +189,10 @@ export interface MediaSpendInput {
   recordType: RecordType;
   recordCode: string;
   month: string;
-  allocated?: number;
-  utilized?: number;
-  pendingInWallet?: number;
+  metaAllocated?: number;
+  metaUtilized?: number;
+  googleAllocated?: number;
+  googleUtilized?: number;
   notes?: string | null;
 }
 
@@ -395,10 +413,20 @@ export const RULE_FIELDS: RuleFieldDef[] = [
   { field: 'circle', label: 'Circle', type: 'string', applicableTo: ['SI'] },
   { field: 'region', label: 'Region', type: 'string', applicableTo: ['Spotlight'] },
   // MediaSpend fields
-  { field: 'allocated', label: 'Allocated Budget', type: 'number', applicableTo: ['MediaSpend'] },
-  { field: 'utilized', label: 'Utilized Amount', type: 'number', applicableTo: ['MediaSpend'] },
-  { field: 'pendingInWallet', label: 'Pending in Wallet', type: 'number', applicableTo: ['MediaSpend'] },
-  { field: 'utilizationPercent', label: 'Utilization %', type: 'computed', applicableTo: ['MediaSpend'], description: 'utilized / allocated * 100' },
+  { field: 'allocated', label: 'Total Allocated Budget', type: 'number', applicableTo: ['MediaSpend'] },
+  { field: 'utilized', label: 'Total Utilized Amount', type: 'number', applicableTo: ['MediaSpend'] },
+  { field: 'pendingInWallet', label: 'Total Pending in Wallet', type: 'number', applicableTo: ['MediaSpend'] },
+  { field: 'utilizationPercent', label: 'Total Utilization %', type: 'computed', applicableTo: ['MediaSpend'], description: 'total utilized / total allocated * 100' },
+  // Meta fields
+  { field: 'metaAllocated', label: 'Meta Allocated', type: 'number', applicableTo: ['MediaSpend'] },
+  { field: 'metaUtilized', label: 'Meta Utilized', type: 'number', applicableTo: ['MediaSpend'] },
+  { field: 'metaPendingInWallet', label: 'Meta Pending in Wallet', type: 'number', applicableTo: ['MediaSpend'] },
+  { field: 'metaUtilizationPercent', label: 'Meta Utilization %', type: 'computed', applicableTo: ['MediaSpend'], description: 'meta utilized / meta allocated * 100' },
+  // Google fields
+  { field: 'googleAllocated', label: 'Google Allocated', type: 'number', applicableTo: ['MediaSpend'] },
+  { field: 'googleUtilized', label: 'Google Utilized', type: 'number', applicableTo: ['MediaSpend'] },
+  { field: 'googlePendingInWallet', label: 'Google Pending in Wallet', type: 'number', applicableTo: ['MediaSpend'] },
+  { field: 'googleUtilizationPercent', label: 'Google Utilization %', type: 'computed', applicableTo: ['MediaSpend'], description: 'google utilized / google allocated * 100' },
   // PlatformFee fields
   { field: 'totalAmount', label: 'Total Amount', type: 'number', applicableTo: ['PlatformFee'] },
   { field: 'isPaid', label: 'Is Paid', type: 'boolean', applicableTo: ['PlatformFee'] },
