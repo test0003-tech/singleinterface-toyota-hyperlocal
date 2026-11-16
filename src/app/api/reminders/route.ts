@@ -6,6 +6,7 @@ import {
   isRenewalReminderDay,
   currentDayOfMonth,
 } from '@/lib/validation'
+import { evaluateAllRules, seedDefaultRules } from '@/lib/rule-engine'
 
 export interface ReminderAlert {
   severity: 'critical' | 'warning' | 'info'
@@ -16,6 +17,7 @@ export interface ReminderAlert {
     | 'media_deficit'
     | 'live_campaign'
     | 'media_renewal'
+    | 'custom_rule'
   title: string
   message: string
   count?: number
@@ -319,6 +321,12 @@ export async function GET() {
         locations: locationsNeedingRenewal.slice(0, 20),
       })
     }
+
+    // --- Custom rule alerts ---
+    // Seed default rules if none exist, then evaluate all enabled rules.
+    await seedDefaultRules()
+    const { alerts: customAlerts } = await evaluateAllRules()
+    alerts.push(...customAlerts)
 
     const data: RemindersData = {
       month,

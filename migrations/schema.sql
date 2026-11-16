@@ -111,6 +111,22 @@ CREATE TABLE "PlatformFee" (
     "updatedAt" DATETIME NOT NULL
 );
 
+-- CreateTable
+CREATE TABLE "Rule" (
+    "id" TEXT NOT NULL PRIMARY KEY,
+    "name" TEXT NOT NULL,
+    "description" TEXT,
+    "targetType" TEXT NOT NULL,
+    "field" TEXT NOT NULL,
+    "operator" TEXT NOT NULL,
+    "value" TEXT,
+    "severity" TEXT NOT NULL DEFAULT 'warning',
+    "scopeMonth" BOOLEAN NOT NULL DEFAULT true,
+    "isEnabled" BOOLEAN NOT NULL DEFAULT true,
+    "createdAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "updatedAt" DATETIME NOT NULL
+);
+
 -- CreateIndex
 CREATE UNIQUE INDEX "User_email_key" ON "User"("email");
 
@@ -167,3 +183,9 @@ CREATE INDEX "PlatformFee_isPaid_idx" ON "PlatformFee"("isPaid");
 
 -- CreateIndex
 CREATE UNIQUE INDEX "PlatformFee_recordType_recordCode_month_key" ON "PlatformFee"("recordType", "recordCode", "month");
+
+-- CreateIndex
+CREATE INDEX "Rule_targetType_idx" ON "Rule"("targetType");
+
+-- CreateIndex
+CREATE INDEX "Rule_isEnabled_idx" ON "Rule"("isEnabled");

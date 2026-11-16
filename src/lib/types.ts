@@ -230,7 +230,8 @@ export interface ReminderAlert {
     | 'pending_payment'
     | 'media_deficit'
     | 'live_campaign'
-    | 'media_renewal';
+    | 'media_renewal'
+    | 'custom_rule';
   title: string;
   message: string;
   count?: number;
@@ -288,4 +289,98 @@ export interface ImportResult {
   updated: number;
   skipped: number;
   errors: string[];
+}
+
+// --- Custom Alert Rules ---
+export type RuleTargetType = 'SI' | 'Spotlight' | 'MediaSpend' | 'PlatformFee';
+
+export type RuleOperator =
+  | 'equals'
+  | 'not_equals'
+  | 'greater_than'
+  | 'less_than'
+  | 'greater_or_equal'
+  | 'less_or_equal'
+  | 'contains'
+  | 'not_contains'
+  | 'is_empty'
+  | 'is_not_empty'
+  | 'days_overdue';
+
+export type RuleSeverity = 'info' | 'warning' | 'critical';
+
+export interface Rule {
+  id: string;
+  name: string;
+  description: string | null;
+  targetType: RuleTargetType;
+  field: string;
+  operator: RuleOperator;
+  value: string | null;
+  severity: RuleSeverity;
+  scopeMonth: boolean;
+  isEnabled: boolean;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface RuleInput {
+  name: string;
+  description?: string | null;
+  targetType: RuleTargetType;
+  field: string;
+  operator: RuleOperator;
+  value?: string | null;
+  severity?: RuleSeverity;
+  scopeMonth?: boolean;
+  isEnabled?: boolean;
+}
+
+// Field metadata for the rule builder UI
+export interface RuleFieldDef {
+  field: string;
+  label: string;
+  type: 'number' | 'string' | 'boolean' | 'computed';
+  applicableTo: RuleTargetType[];
+  description?: string;
+}
+
+export const RULE_FIELDS: RuleFieldDef[] = [
+  // SI fields
+  { field: 'isLive', label: 'Is Live', type: 'boolean', applicableTo: ['SI', 'Spotlight'] },
+  { field: 'gmbListingStatus', label: 'GMB Listing Status', type: 'string', applicableTo: ['SI'] },
+  { field: 'salesLandingNumbers', label: 'Sales Landing Numbers', type: 'string', applicableTo: ['SI'] },
+  { field: 'serviceLandingNumbers', label: 'Service Landing Numbers', type: 'string', applicableTo: ['SI'] },
+  { field: 'spotlightLandingNumbers', label: 'Spotlight Landing Numbers', type: 'string', applicableTo: ['Spotlight'] },
+  { field: 'circle', label: 'Circle', type: 'string', applicableTo: ['SI'] },
+  { field: 'region', label: 'Region', type: 'string', applicableTo: ['Spotlight'] },
+  // MediaSpend fields
+  { field: 'allocated', label: 'Allocated Budget', type: 'number', applicableTo: ['MediaSpend'] },
+  { field: 'utilized', label: 'Utilized Amount', type: 'number', applicableTo: ['MediaSpend'] },
+  { field: 'pendingInWallet', label: 'Pending in Wallet', type: 'number', applicableTo: ['MediaSpend'] },
+  { field: 'utilizationPercent', label: 'Utilization %', type: 'computed', applicableTo: ['MediaSpend'], description: 'utilized / allocated * 100' },
+  // PlatformFee fields
+  { field: 'totalAmount', label: 'Total Amount', type: 'number', applicableTo: ['PlatformFee'] },
+  { field: 'isPaid', label: 'Is Paid', type: 'boolean', applicableTo: ['PlatformFee'] },
+  { field: 'baseAmount', label: 'Base Amount', type: 'number', applicableTo: ['PlatformFee'] },
+];
+
+export const RULE_OPERATORS: { value: RuleOperator; label: string; needsValue: boolean }[] = [
+  { value: 'equals', label: 'equals', needsValue: true },
+  { value: 'not_equals', label: 'does not equal', needsValue: true },
+  { value: 'greater_than', label: 'is greater than', needsValue: true },
+  { value: 'less_than', label: 'is less than', needsValue: true },
+  { value: 'greater_or_equal', label: 'is greater than or equal', needsValue: true },
+  { value: 'less_or_equal', label: 'is less than or equal', needsValue: true },
+  { value: 'contains', label: 'contains', needsValue: true },
+  { value: 'not_contains', label: 'does not contain', needsValue: true },
+  { value: 'is_empty', label: 'is empty', needsValue: false },
+  { value: 'is_not_empty', label: 'is not empty', needsValue: false },
+  { value: 'days_overdue', label: 'days overdue (over)', needsValue: true },
+];
+
+export interface RuleEvaluationResult {
+  rule: Rule;
+  matchedCount: number;
+  matchedItems: { code: string; type: string; name?: string | null; detail?: string }[];
 }
