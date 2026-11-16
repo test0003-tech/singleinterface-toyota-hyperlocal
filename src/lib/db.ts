@@ -28,7 +28,9 @@ if (!client) {
     // These are bundled by OpenNext; in local Node they resolve to the
     // installed packages but getCloudflareContext() throws when called
     // outside a request context.
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
     const cf = require("@opennextjs/cloudflare");
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
     const { PrismaD1 } = require("@prisma/adapter-d1");
     const { env } = cf.getCloudflareContext();
     const d1 = (env as unknown as { DB?: D1Database }).DB;
