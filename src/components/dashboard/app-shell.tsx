@@ -35,6 +35,7 @@ import {
   ClipboardCheck,
   History,
   Link2,
+  PhoneCall,
 } from 'lucide-react'
 import { Overview } from '@/components/dashboard/overview'
 import { SIDataTable } from '@/components/dashboard/si-data-table'
@@ -50,10 +51,11 @@ import { FinancialReportsPage } from '@/components/dashboard/financial-reports-p
 import { DataQualityPage } from '@/components/dashboard/data-quality-page'
 import { AuditLogPage } from '@/components/dashboard/audit-log-page'
 import { LocationMappingPage } from '@/components/dashboard/location-mapping-page'
+import { VmnMappingPage } from '@/components/dashboard/vmn-mapping-page'
 import { useToast } from '@/hooks/use-toast'
 import { formatMonth } from '@/lib/validation'
 
-type PageId = 'overview' | 'si' | 'spotlight' | 'media-spend' | 'platform-fees' | 'payments' | 'alerts' | 'rules' | 'financial-reports' | 'data-quality' | 'audit-log' | 'location-mapping'
+type PageId = 'overview' | 'si' | 'spotlight' | 'media-spend' | 'platform-fees' | 'payments' | 'alerts' | 'rules' | 'financial-reports' | 'data-quality' | 'audit-log' | 'location-mapping' | 'vmn-mapping'
 
 interface NavItem {
   id: PageId
@@ -100,6 +102,12 @@ const NAV_GROUPS: { label: string; items: NavItem[] }[] = [
         label: 'Location Mapping',
         icon: <Link2 className="h-4 w-4" />,
         description: 'SI ↔ Spotlight record mapping & auto-matching',
+      },
+      {
+        id: 'vmn-mapping',
+        label: 'VMN & Mapping',
+        icon: <PhoneCall className="h-4 w-4" />,
+        description: 'VMNs, landing numbers, business hours & IVR live status',
       },
     ],
   },
@@ -323,6 +331,7 @@ export function AppShell() {
             {page === 'si' && <SIDataTable onRefresh={handleRefresh} />}
             {page === 'spotlight' && <SpotlightDataTable onRefresh={handleRefresh} />}
             {page === 'location-mapping' && <LocationMappingPage />}
+            {page === 'vmn-mapping' && <VmnMappingPage />}
             {page === 'media-spend' && <MediaSpendTab refreshKey={refreshKey} />}
             {page === 'platform-fees' && <PlatformFeesTab refreshKey={refreshKey} />}
             {page === 'payments' && <PaymentsPage refreshKey={refreshKey} />}
