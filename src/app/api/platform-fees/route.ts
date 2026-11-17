@@ -213,3 +213,80 @@ export async function POST(req: NextRequest) {
     )
   }
 }
+
+/**
+ * Bulk delete platform fees.
+ *
+ * Query params:
+ *   ?all=1              -> delete ALL platform fees (and their payments via cascade)
+ *   ?month=YYYY-MM      -> delete only fees for a specific month
+ *   ?recordType=SI      -> delete only fees for a record type
+ *   ?recordCode=BL001   -> delete only fees for a specific store code
+ *   ?paymentStatus=unpaid -> delete only fees with a specific payment status
+ *
+ * Payments associated with the deleted fees are automatically removed due to
+ * the onDelete: Cascade relation on the Payment model.
+ */
+export async function DELETE(req: NextRequest) {
+  try {
+    const { searchParams } = new URL(req.url)
+    const all = searchParams.get('all') === '1'
+    const month = (searchParams.get('month') ?? '').trim()
+    const recordType = (searchParams.get('recordType') ?? '').trim()
+    const recordCode = (searchParams.get('recordCode') ?? '').trim()
+    const paymentStatus = (searchParams.get('paymentStatus') ?? '').trim()
+
+    if (!all && !month && !recordType && !recordCode && !paymentStatus) {
+      return NextResponse.json(
+        {
+          error:
+            'Specify at least one filter (?all=1, ?month=, ?recordType=, ?recordCode=, ?paymentStatus=) to delete. Bare DELETE is not allowed for safety.',
+        },
+        { status: 400 }
+      )
+    }
+
+    const where: Record<string, unknown> = {}
+    if (month) where.month = month
+    if (recordType === 'SI' || recordType === 'Spotlight')
+      where.recordType = recordType
+    if (recordCode) where.recordCode = recordCode
+    if (paymentStatus === 'unpaid' || paymentStatus === 'partial' || paymentStatus === 'paid') {
+      where.paymentStatus = paymentStatus
+    }
+
+    // Count fees and payments before deletion (for audit + response)
+    const [feeCount, paymentCount] = await Promise.all([
+      db.platformFee.count({ where }),
+      db.payment.count({
+        where: {
+          platformFee: where,
+        },
+      }),
+    ])
+
+    // Delete fees — payments cascade-delete automatically
+    await db.platformFee.deleteMany({ where })
+
+    await auditLog({
+      action: 'delete',
+      entityType: 'PlatformFee',
+      entityId: 'bulk',
+      entityCode: all ? 'ALL' : JSON.stringify(where),
+      summary: `Bulk delete: ${feeCount} platform fee(s) and ${paymentCount} associated payment(s) deleted${all ? ' (all data)' : ''}`,
+    })
+
+    return NextResponse.json({
+      success: true,
+      deletedFees: feeCount,
+      deletedPayments: paymentCount,
+      message: `Deleted ${feeCount} platform fee(s) and ${paymentCount} associated payment(s)`,
+    })
+  } catch (e) {
+    console.error('PlatformFee bulk DELETE error', e)
+    return NextResponse.json(
+      { error: 'Failed to delete platform fees' },
+      { status: 500 }
+    )
+  }
+}
