@@ -37,12 +37,14 @@ import {
   TrendingUp,
   Clock,
   CheckCircle2,
+  Upload,
 } from 'lucide-react'
 import { useToast } from '@/hooks/use-toast'
-import { listPayments, exportPlatformFees } from '@/lib/api'
+import { listPayments, exportPlatformFees, importPaymentsFile } from '@/lib/api'
 import type { Payment, PaymentMethod, PaginatedResponse } from '@/lib/types'
 import { PAYMENT_METHODS } from '@/lib/types'
 import { formatCurrency } from '@/lib/validation'
+import { FinanceImportDialog } from './finance-import-dialog'
 
 const PAGE_SIZE_OPTIONS = [10, 25, 50, 100]
 
@@ -66,6 +68,7 @@ export function PaymentsPage({ refreshKey }: { refreshKey: number }) {
   const [page, setPage] = useState(1)
   const [pageSize, setPageSize] = useState(20)
   const [loading, setLoading] = useState(true)
+  const [importOpen, setImportOpen] = useState(false)
   const [data, setData] = useState<
     PaginatedResponse<Payment & {
       platformFee?: {
@@ -144,6 +147,15 @@ export function PaymentsPage({ refreshKey }: { refreshKey: number }) {
           </p>
         </div>
         <div className="flex items-center gap-2">
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => setImportOpen(true)}
+            disabled={loading}
+          >
+            <Upload className="mr-2 h-4 w-4" />
+            Import Payments
+          </Button>
           <Button
             variant="outline"
             size="sm"
@@ -364,6 +376,26 @@ export function PaymentsPage({ refreshKey }: { refreshKey: number }) {
           )}
         </div>
       )}
+
+      <FinanceImportDialog
+        open={importOpen}
+        onOpenChange={setImportOpen}
+        title="Import Payments from Excel/CSV"
+        description="Upload payment transactions. Each payment is linked to a platform fee by invoice number or store code + month."
+        expectedColumns={[
+          'Invoice Number',
+          'Store Code',
+          'Month (YYYY-MM)',
+          'Amount',
+          'Method',
+          'Reference',
+          'Paid Date',
+          'Notes',
+        ]}
+        onImportFile={importPaymentsFile}
+        onImported={fetchData}
+        downloadTemplate={() => downloadPaymentsTemplate()}
+      />
     </div>
   )
 }
@@ -410,6 +442,33 @@ function downloadCSV(rows: any[]) {
   const a = document.createElement('a')
   a.href = url
   a.download = 'payments.csv'
+  a.click()
+  URL.revokeObjectURL(url)
+}
+
+function downloadPaymentsTemplate() {
+  const headers = [
+    'Invoice Number',
+    'Store Code',
+    'Month',
+    'Amount',
+    'Method',
+    'Reference',
+    'Paid Date',
+    'Notes',
+  ]
+  const sample = [
+    ['INV-202511-0001', 'BL001', '2025-11', '9510.80', 'bank_transfer', 'UTR123456789', '2025-11-15', 'Full payment'],
+    ['', '10001', '2025-11', '5000', 'upi', 'UPI-REF-001', '2025-11-20', 'Partial payment'],
+  ]
+  const csv = [headers, ...sample]
+    .map((row) => row.map((c) => `"${String(c ?? '').replace(/"/g, '""')}"`).join(','))
+    .join('\n')
+  const blob = new Blob([csv], { type: 'text/csv;charset=utf-8' })
+  const url = URL.createObjectURL(blob)
+  const a = document.createElement('a')
+  a.href = url
+  a.download = 'payments-template.csv'
   a.click()
   URL.revokeObjectURL(url)
 }

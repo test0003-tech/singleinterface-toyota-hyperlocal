@@ -22,9 +22,11 @@ import { SI_FIELDS } from '@/lib/fields'
 import { countLandingNumbers } from '@/lib/validation'
 import { useToast } from '@/hooks/use-toast'
 import { Power, PowerOff } from 'lucide-react'
+import { ImportDialog } from './import-dialog'
 
 export function SIDataTable({ onRefresh }: { onRefresh?: () => void }) {
   const { toast } = useToast()
+  const [importOpen, setImportOpen] = useState(false)
   const [filterOptions, setFilterOptions] = useState<{
     states: string[]
     circles: string[]
@@ -255,6 +257,7 @@ export function SIDataTable({ onRefresh }: { onRefresh?: () => void }) {
   ]
 
   return (
+    <>
     <DataTable<SIRecord>
       title="SI Data"
       description="Manage Store Information records with full location, VMN mapping, and live status."
@@ -266,12 +269,20 @@ export function SIDataTable({ onRefresh }: { onRefresh?: () => void }) {
       onUpdate={handleUpdate}
       onDelete={handleDelete}
       onExport={handleExport}
+      onImport={() => setImportOpen(true)}
+      importLabel="Import Excel"
       recordToForm={recordToForm}
       totalLabel="records"
       addLabel="Add SI Record"
       exportLabel="Export CSV"
       extraActions={extraActions}
     />
+    <ImportDialog
+      open={importOpen}
+      onOpenChange={setImportOpen}
+      onImported={() => { onRefresh?.() }}
+    />
+    </>
   )
 }
 

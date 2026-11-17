@@ -22,9 +22,11 @@ import { SPOTLIGHT_FIELDS } from '@/lib/fields'
 import { countLandingNumbers } from '@/lib/validation'
 import { useToast } from '@/hooks/use-toast'
 import { Power, PowerOff } from 'lucide-react'
+import { ImportDialog } from './import-dialog'
 
 export function SpotlightDataTable({ onRefresh }: { onRefresh?: () => void }) {
   const { toast } = useToast()
+  const [importOpen, setImportOpen] = useState(false)
   const [filterOptions, setFilterOptions] = useState<{
     states: string[]
     regions: string[]
@@ -251,6 +253,7 @@ export function SpotlightDataTable({ onRefresh }: { onRefresh?: () => void }) {
   ]
 
   return (
+    <>
     <DataTable<SpotlightRecord>
       title="Spotlight Data"
       description="Manage Spotlight location records with VMN mapping, domain details, and live status."
@@ -262,12 +265,20 @@ export function SpotlightDataTable({ onRefresh }: { onRefresh?: () => void }) {
       onUpdate={handleUpdate}
       onDelete={handleDelete}
       onExport={handleExport}
+      onImport={() => setImportOpen(true)}
+      importLabel="Import Excel"
       recordToForm={recordToForm}
       totalLabel="records"
       addLabel="Add Spotlight Record"
       exportLabel="Export CSV"
       extraActions={extraActions}
     />
+    <ImportDialog
+      open={importOpen}
+      onOpenChange={setImportOpen}
+      onImported={() => { onRefresh?.() }}
+    />
+    </>
   )
 }
 

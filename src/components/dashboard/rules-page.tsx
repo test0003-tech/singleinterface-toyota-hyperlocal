@@ -50,6 +50,7 @@ import {
   Shield,
   Play,
   Zap,
+  Upload,
   AlertTriangle,
   AlertCircle,
   Info,
@@ -61,6 +62,7 @@ import {
   updateRule,
   deleteRule,
   evaluateRules,
+  importRulesFile,
 } from '@/lib/api'
 import type {
   Rule,
@@ -70,6 +72,7 @@ import type {
   RuleSeverity,
 } from '@/lib/types'
 import { RULE_FIELDS, RULE_OPERATORS } from '@/lib/types'
+import { FinanceImportDialog } from './finance-import-dialog'
 
 const TARGET_LABELS: Record<RuleTargetType, string> = {
   SI: 'SI Record',
@@ -102,6 +105,7 @@ export function RulesPage() {
   const [loading, setLoading] = useState(true)
   const [formOpen, setFormOpen] = useState(false)
   const [editing, setEditing] = useState<Rule | null>(null)
+  const [importOpen, setImportOpen] = useState(false)
   const [deleteTarget, setDeleteTarget] = useState<Rule | null>(null)
   const [deleting, setDeleting] = useState(false)
   const [evaluating, setEvaluating] = useState(false)
@@ -238,6 +242,10 @@ export function RulesPage() {
           </p>
         </div>
         <div className="flex flex-wrap items-center gap-2">
+          <Button variant="outline" size="sm" onClick={() => setImportOpen(true)}>
+            <Upload className="mr-2 h-4 w-4" />
+            Import Rules
+          </Button>
           <Button variant="outline" size="sm" onClick={handleEvaluate} disabled={evaluating}>
             {evaluating ? (
               <Loader2 className="mr-2 h-4 w-4 animate-spin" />
@@ -435,6 +443,27 @@ export function RulesPage() {
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+
+      <FinanceImportDialog
+        open={importOpen}
+        onOpenChange={setImportOpen}
+        title="Import Alert Rules from Excel/CSV"
+        description="Upload custom alert rules. Rules are matched by name — existing rules with the same name will be updated."
+        expectedColumns={[
+          'Name',
+          'Description',
+          'Target Type',
+          'Field',
+          'Operator',
+          'Value',
+          'Severity',
+          'Scope Month',
+          'Enabled',
+        ]}
+        onImportFile={importRulesFile}
+        onImported={fetchRules}
+        downloadTemplate={() => downloadRulesTemplate()}
+      />
     </div>
   )
 }
@@ -697,4 +726,33 @@ function RuleFormDialog({
       </DialogContent>
     </Dialog>
   )
+}
+
+function downloadRulesTemplate() {
+  const headers = [
+    'Name',
+    'Description',
+    'Target Type',
+    'Field',
+    'Operator',
+    'Value',
+    'Severity',
+    'Scope Month',
+    'Enabled',
+  ]
+  const sample = [
+    ['Live SI without platform fee', 'Alert when a live SI has no platform fee this month', 'SI', 'isLive', 'equals', 'true', 'critical', 'true', 'true'],
+    ['Media spend exceeds budget', 'Alert when utilized > allocated', 'MediaSpend', 'utilizationPercent', 'greater_than', '100', 'warning', 'true', 'true'],
+    ['GMB listing not verified', 'Check SI GMB status', 'SI', 'gmbListingStatus', 'not_equals', 'Verified', 'warning', 'false', 'true'],
+  ]
+  const csv = [headers, ...sample]
+    .map((row) => row.map((c) => `"${String(c ?? '').replace(/"/g, '""')}"`).join(','))
+    .join('\n')
+  const blob = new Blob([csv], { type: 'text/csv;charset=utf-8' })
+  const url = URL.createObjectURL(blob)
+  const a = document.createElement('a')
+  a.href = url
+  a.download = 'alert-rules-template.csv'
+  a.click()
+  URL.revokeObjectURL(url)
 }

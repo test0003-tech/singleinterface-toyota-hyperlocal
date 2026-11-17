@@ -56,6 +56,7 @@ import {
   Pencil,
   Trash2,
   Download,
+  Upload,
   MoreHorizontal,
   Eye,
   Loader2,
@@ -108,6 +109,8 @@ export interface DataTableProps<T extends { id: string }> {
   totalLabel: string
   addLabel: string
   exportLabel: string
+  onImport?: () => void
+  importLabel?: string
   extraActions?: CustomRowAction<T>[]
 }
 
@@ -128,6 +131,8 @@ export function DataTable<T extends { id: string }>({
   totalLabel,
   addLabel,
   exportLabel,
+  onImport,
+  importLabel = 'Import',
   extraActions = [],
 }: DataTableProps<T>) {
   const { toast } = useToast()
@@ -275,6 +280,17 @@ export function DataTable<T extends { id: string }>({
           )}
         </div>
         <div className="flex flex-wrap items-center gap-2">
+          {onImport && (
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={onImport}
+              disabled={loading}
+            >
+              <Upload className="mr-2 h-4 w-4" />
+              {importLabel}
+            </Button>
+          )}
           <Button
             variant="outline"
             size="sm"

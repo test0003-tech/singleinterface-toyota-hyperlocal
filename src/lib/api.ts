@@ -476,3 +476,31 @@ export function deletePayment(id: string) {
 export function getPlatformFeeWithPayments(id: string) {
   return jsonFetch<PlatformFeeWithPayments>(`/api/platform-fees/${id}`)
 }
+
+// --- Payments Import ---
+export function importPaymentsFile(
+  file: File,
+  mode: 'upsert' | 'replace' = 'upsert'
+) {
+  const fd = new FormData()
+  fd.append('file', file)
+  fd.append('mode', mode)
+  return jsonFetch<ImportResult>(`/api/payments/import`, {
+    method: 'POST',
+    body: fd,
+  })
+}
+
+// --- Rules Import ---
+export function importRulesFile(
+  file: File,
+  mode: 'upsert' | 'replace' = 'upsert'
+) {
+  const fd = new FormData()
+  fd.append('file', file)
+  fd.append('mode', mode)
+  return jsonFetch<ImportResult>(`/api/rules/import`, {
+    method: 'POST',
+    body: fd,
+  })
+}
