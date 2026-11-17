@@ -10,7 +10,7 @@
         "@dnd-kit/utilities": "^3.2.2",
         "@hookform/resolvers": "^5.1.1",
         "@mdxeditor/editor": "^3.39.1",
-        "@prisma/adapter-d1": "^7.10.1",
+        "@prisma/adapter-d1": "6.19.2",
         "@prisma/client": "^6.11.1",
         "@radix-ui/react-accordion": "^1.2.11",
         "@radix-ui/react-alert-dialog": "^1.1.14",
@@ -673,15 +673,15 @@
 
     "@poppinss/exception": ["@poppinss/exception@1.2.3", "", {}, "sha512-dCED+QRChTVatE9ibtoaxc+WkdzOSjYTKi/+uacHWIsfodVfpsueo3+DKpgU5Px8qXjgmXkSvhXvSCz3fnP9lw=="],
 
-    "@prisma/adapter-d1": ["@prisma/adapter-d1@7.10.1", "", { "dependencies": { "@cloudflare/workers-types": "^4.20251014.0", "@prisma/driver-adapter-utils": "7.10.1", "ky": "1.7.5" } }, "sha512-kONwnq16IDDXROx4yNmsf/jYxuMClN4FZzKyxs6zUbt0/L1M1RCfjSR/UQKgBkRfj2MWZVITVlNCko4l24ZbXw=="],
+    "@prisma/adapter-d1": ["@prisma/adapter-d1@6.19.2", "", { "dependencies": { "@cloudflare/workers-types": "^4.20250408.0", "@prisma/driver-adapter-utils": "6.19.2", "ky": "1.7.5" } }, "sha512-LqMeGq7PnlY/aAzbRiqNqzCTOh1ah/DKYxUPcQOKZmH4lxzMVik/+Y729GzC403jV0pLIOB2Hbh3zSj7gdIPFQ=="],
 
     "@prisma/client": ["@prisma/client@6.19.2", "https://registry.npmjs.com/@prisma/client/-/client-6.19.2.tgz", { "peerDependencies": { "prisma": "*", "typescript": ">=5.1.0" }, "optionalPeers": ["prisma", "typescript"] }, "sha512-gR2EMvfK/aTxsuooaDA32D8v+us/8AAet+C3J1cc04SW35FPdZYgLF+iN4NDLUgAaUGTKdAB0CYenu1TAgGdMg=="],
 
     "@prisma/config": ["@prisma/config@6.19.2", "https://registry.npmjs.com/@prisma/config/-/config-6.19.2.tgz", { "dependencies": { "c12": "3.1.0", "deepmerge-ts": "7.1.5", "effect": "3.18.4", "empathic": "2.0.0" } }, "sha512-kadBGDl+aUswv/zZMk9Mx0C8UZs1kjao8H9/JpI4Wh4SHZaM7zkTwiKn/iFLfRg+XtOAo/Z/c6pAYhijKl0nzQ=="],
 
-    "@prisma/debug": ["@prisma/debug@7.10.1", "", {}, "sha512-eFCAkGZ13D/qPg48JBlG5IWi9cSBBOC7oG3abDPcAkYioDWlIjh0YJJLK2J7qo5S+xWWD8I6egAN/8KbCaiMCA=="],
+    "@prisma/debug": ["@prisma/debug@6.19.2", "https://registry.npmjs.com/@prisma/debug/-/debug-6.19.2.tgz", {}, "sha512-lFnEZsLdFLmEVCVNdskLDCL8Uup41GDfU0LUfquw+ercJC8ODTuL0WNKgOKmYxCJVvFwf0OuZBzW99DuWmoH2A=="],
 
-    "@prisma/driver-adapter-utils": ["@prisma/driver-adapter-utils@7.10.1", "", { "dependencies": { "@prisma/debug": "7.10.1" } }, "sha512-DJ4c6xvVnm3s9ZUyql9nCUicADSqyvH+CjXRCM9L6m5zJxCNmebCElG6X4irICq3rosBwlX+S19Dxq/4IrZk3A=="],
+    "@prisma/driver-adapter-utils": ["@prisma/driver-adapter-utils@6.19.2", "", { "dependencies": { "@prisma/debug": "6.19.2" } }, "sha512-tkHsL3jhx81eXg2oqtJH/1IEs8uEeUb1RpqHtwYqdNb176u9D0mnHRZM1/cKca/XhLpq49Nnd9XDxdMfWcKAYA=="],
 
     "@prisma/engines": ["@prisma/engines@6.19.2", "https://registry.npmjs.com/@prisma/engines/-/engines-6.19.2.tgz", { "dependencies": { "@prisma/debug": "6.19.2", "@prisma/engines-version": "7.1.1-3.c2990dca591cba766e3b7ef5d9e8a84796e47ab7", "@prisma/fetch-engine": "6.19.2", "@prisma/get-platform": "6.19.2" } }, "sha512-TTkJ8r+uk/uqczX40wb+ODG0E0icVsMgwCTyTHXehaEfb0uo80M9g1aW1tEJrxmFHeOZFXdI2sTA1j1AgcHi4A=="],
 
@@ -2420,12 +2420,6 @@
     "@opennextjs/aws/cookie": ["cookie@1.1.1", "", {}, "sha512-ei8Aos7ja0weRpFzJnEA9UHJ/7XQmqglbRwnf2ATjcB9Wq874VKH9kfjjirM6UhU2/E5fFYadylyhFldcqSidQ=="],
 
     "@poppinss/dumper/supports-color": ["supports-color@10.2.2", "", {}, "sha512-SS+jx45GF1QjgEXQx4NJZV9ImqmO2NPz5FNsIHrsDjh2YsHnawpan7SNQ1o8NuhrbHZy9AZhIoCUiCeaW/C80g=="],
-
-    "@prisma/engines/@prisma/debug": ["@prisma/debug@6.19.2", "https://registry.npmjs.com/@prisma/debug/-/debug-6.19.2.tgz", {}, "sha512-lFnEZsLdFLmEVCVNdskLDCL8Uup41GDfU0LUfquw+ercJC8ODTuL0WNKgOKmYxCJVvFwf0OuZBzW99DuWmoH2A=="],
-
-    "@prisma/fetch-engine/@prisma/debug": ["@prisma/debug@6.19.2", "https://registry.npmjs.com/@prisma/debug/-/debug-6.19.2.tgz", {}, "sha512-lFnEZsLdFLmEVCVNdskLDCL8Uup41GDfU0LUfquw+ercJC8ODTuL0WNKgOKmYxCJVvFwf0OuZBzW99DuWmoH2A=="],
-
-    "@prisma/get-platform/@prisma/debug": ["@prisma/debug@6.19.2", "https://registry.npmjs.com/@prisma/debug/-/debug-6.19.2.tgz", {}, "sha512-lFnEZsLdFLmEVCVNdskLDCL8Uup41GDfU0LUfquw+ercJC8ODTuL0WNKgOKmYxCJVvFwf0OuZBzW99DuWmoH2A=="],
 
     "@radix-ui/react-alert-dialog/@radix-ui/react-slot": ["@radix-ui/react-slot@1.2.3", "https://registry.npmjs.com/@radix-ui/react-slot/-/react-slot-1.2.3.tgz", { "dependencies": { "@radix-ui/react-compose-refs": "1.1.2" }, "peerDependencies": { "@types/react": "*", "react": "^16.8 || ^17.0 || ^18.0 || ^19.0 || ^19.0.0-rc" }, "optionalPeers": ["@types/react"] }, "sha512-aeNmHnBxbi2St0au6VBVC7JXFlhLlOnvIIlePNniyUNAClzmtAUEY8/pBiK3iHjufOlwA+c20/8jngo7xcrg8A=="],
 
