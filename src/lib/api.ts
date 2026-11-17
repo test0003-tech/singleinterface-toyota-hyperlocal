@@ -7,6 +7,7 @@ import type {
   DashboardStats,
   MediaSpend,
   MediaSpendInput,
+  MediaSpendListResponse,
   PlatformFee,
   PlatformFeeInput,
   PlatformFeeWithPayments,
@@ -225,7 +226,7 @@ export interface MediaSpendListParams {
 
 export function listMediaSpend(
   params: MediaSpendListParams
-): Promise<PaginatedResponse<MediaSpend>> {
+): Promise<MediaSpendListResponse> {
   const q = new URLSearchParams()
   if (params.page) q.set('page', String(params.page))
   if (params.pageSize) q.set('pageSize', String(params.pageSize))
@@ -233,7 +234,7 @@ export function listMediaSpend(
   if (params.month) q.set('month', params.month)
   if (params.recordType) q.set('recordType', params.recordType)
   if (params.recordCode) q.set('recordCode', params.recordCode)
-  return jsonFetch<PaginatedResponse<MediaSpend>>(`/api/media-spend?${q.toString()}`)
+  return jsonFetch<MediaSpendListResponse>(`/api/media-spend?${q.toString()}`)
 }
 
 export function exportMediaSpend(params: Omit<MediaSpendListParams, 'page' | 'pageSize'>) {

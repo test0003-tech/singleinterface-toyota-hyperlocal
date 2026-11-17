@@ -54,7 +54,22 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu'
+import {
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from '@/components/ui/popover'
+import {
+  Command,
+  CommandEmpty,
+  CommandGroup,
+  CommandInput,
+  CommandItem,
+  CommandList,
+} from '@/components/ui/command'
+import { Separator } from '@/components/ui/separator'
 import { Skeleton } from '@/components/ui/skeleton'
+import { cn } from '@/lib/utils'
 import {
   Search,
   Plus,
@@ -69,6 +84,12 @@ import {
   Upload,
   Facebook,
   Chrome,
+  Store,
+  CheckCircle2,
+  AlertTriangle,
+  ChevronsUpDown,
+  Check,
+  Keyboard,
 } from 'lucide-react'
 import { useToast } from '@/hooks/use-toast'
 import {
@@ -80,7 +101,7 @@ import {
   getStats,
   importMediaSpendFile,
 } from '@/lib/api'
-import type { MediaSpend, RecordType } from '@/lib/types'
+import type { MediaSpend, RecordType, LiveSpotlightStore, LiveSpotlightSummary } from '@/lib/types'
 import { currentMonth, formatMonth, recentMonths, formatCurrency } from '@/lib/validation'
 import { FinanceImportDialog } from './finance-import-dialog'
 
@@ -114,6 +135,12 @@ export function MediaSpendTab({ refreshKey }: { refreshKey: number }) {
 
   const [formOpen, setFormOpen] = useState(false)
   const [editing, setEditing] = useState<MediaSpend | null>(null)
+  const [presetCode, setPresetCode] = useState<string | null>(null)
+  const [presetMonth, setPresetMonth] = useState<string | null>(null)
+  const [liveStores, setLiveStores] = useState<LiveSpotlightStore[]>([])
+  const [liveSummary, setLiveSummary] = useState<LiveSpotlightSummary | null>(null)
+  const [showMissing, setShowMissing] = useState(false)
+  const [missingSearch, setMissingSearch] = useState('')
   const [deleteTarget, setDeleteTarget] = useState<MediaSpend | null>(null)
   const [deleting, setDeleting] = useState(false)
   const [exporting, setExporting] = useState(false)
@@ -145,6 +172,8 @@ export function MediaSpendTab({ refreshKey }: { refreshKey: number }) {
         total: res.total,
         totalPages: res.totalPages,
       })
+      setLiveStores(res.liveSpotlightStores ?? [])
+      setLiveSummary(res.liveSpotlightSummary ?? null)
     } catch (e) {
       toast({
         title: 'Error',
@@ -199,6 +228,15 @@ export function MediaSpendTab({ refreshKey }: { refreshKey: number }) {
 
   function openAdd() {
     setEditing(null)
+    setPresetCode(null)
+    setPresetMonth(null)
+    setFormOpen(true)
+  }
+
+  function openAddFor(code: string, month?: string) {
+    setEditing(null)
+    setPresetCode(code)
+    setPresetMonth(month ?? null)
     setFormOpen(true)
   }
 
@@ -273,6 +311,19 @@ export function MediaSpendTab({ refreshKey }: { refreshKey: number }) {
   }
 
   const monthOptions = recentMonths(12)
+
+  const missingStores = liveStores
+    .filter((s) => !s.hasBudget)
+    .filter((s) => {
+      if (!missingSearch.trim()) return true
+      const q = missingSearch.trim().toLowerCase()
+      return (
+        s.code.toLowerCase().includes(q) ||
+        (s.name ?? '').toLowerCase().includes(q) ||
+        (s.city ?? '').toLowerCase().includes(q) ||
+        (s.state ?? '').toLowerCase().includes(q)
+      )
+    })
 
   const total = data?.total ?? 0
   const totalPages = data?.totalPages ?? 0
@@ -414,6 +465,106 @@ export function MediaSpendTab({ refreshKey }: { refreshKey: number }) {
           </div>
         </div>
       </div>
+
+      {/* Live Spotlight stores coverage */}
+      <Card>
+        <CardContent className="pt-5">
+          <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
+            <div className="flex flex-wrap items-center gap-x-4 gap-y-2">
+              <div className="flex items-center gap-2">
+                <div className="rounded-lg p-1.5 bg-emerald-500/10 text-emerald-600">
+                  <Store className="h-4 w-4" />
+                </div>
+                <div className="text-sm">
+                  <span className="font-bold">{liveSummary?.total ?? liveStores.length}</span>{' '}
+                  <span className="text-muted-foreground">live Spotlight stores</span>
+                </div>
+              </div>
+              <Separator orientation="vertical" className="h-6 hidden sm:block" />
+              <div className="flex items-center gap-2">
+                <CheckCircle2 className="h-4 w-4 text-emerald-600 shrink-0" />
+                <div className="text-sm">
+                  <span className="font-bold text-emerald-700">{liveSummary?.withBudget ?? 0}</span>{' '}
+                  <span className="text-muted-foreground">
+                    with budget{liveSummary ? ` for ${formatMonth(liveSummary.month)}` : ''}
+                  </span>
+                </div>
+              </div>
+              <Separator orientation="vertical" className="h-6 hidden sm:block" />
+              <div className="flex items-center gap-2">
+                <AlertTriangle className="h-4 w-4 text-amber-600 shrink-0" />
+                <div className="text-sm">
+                  <span className="font-bold text-amber-700">{liveSummary?.withoutBudget ?? 0}</span>{' '}
+                  <span className="text-muted-foreground">missing budget</span>
+                </div>
+              </div>
+            </div>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => setShowMissing((s) => !s)}
+            >
+              {showMissing ? 'Hide' : 'View'} stores without budget
+            </Button>
+          </div>
+
+          {showMissing && (
+            <div className="mt-4 border-t pt-4 space-y-3">
+              <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+                <p className="text-xs text-muted-foreground">
+                  All live Spotlight store codes without a media budget
+                  {liveSummary ? ` for ${formatMonth(liveSummary.month)}` : ''}. Click{' '}
+                  <Plus className="inline h-3 w-3" /> to add their budget.
+                </p>
+                <div className="relative w-full sm:w-64">
+                  <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground" />
+                  <Input
+                    placeholder="Filter stores..."
+                    value={missingSearch}
+                    onChange={(e) => setMissingSearch(e.target.value)}
+                    className="h-8 pl-8 text-xs"
+                  />
+                </div>
+              </div>
+              <div className="max-h-72 overflow-y-auto custom-scrollbar">
+                {missingStores.length === 0 ? (
+                  <p className="text-sm text-muted-foreground py-2">
+                    All live Spotlight stores have a budget entry
+                    {liveSummary ? ` for ${formatMonth(liveSummary.month)}` : ''}.
+                  </p>
+                ) : (
+                  <div className="flex flex-wrap gap-2">
+                    {missingStores.map((s) => (
+                      <div
+                        key={s.code}
+                        className="group flex items-center gap-2 rounded-full border bg-muted/30 pl-3 pr-1 py-1 hover:border-primary/40 hover:bg-muted/60"
+                      >
+                        <div className="flex flex-col leading-tight">
+                          <span className="font-mono text-[11px] font-semibold">{s.code}</span>
+                          {s.name && (
+                            <span className="text-[10px] text-muted-foreground max-w-[200px] truncate">
+                              {s.name}
+                            </span>
+                          )}
+                        </div>
+                        <Button
+                          size="icon"
+                          variant="ghost"
+                          className="h-6 w-6 rounded-full"
+                          title={`Add media budget for ${s.code}`}
+                          onClick={() => openAddFor(s.code, liveSummary?.month)}
+                        >
+                          <Plus className="h-3.5 w-3.5" />
+                        </Button>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            </div>
+          )}
+        </CardContent>
+      </Card>
 
       {/* Filters */}
       <div className="flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-center">
@@ -655,6 +806,9 @@ export function MediaSpendTab({ refreshKey }: { refreshKey: number }) {
         open={formOpen}
         onOpenChange={setFormOpen}
         editing={editing}
+        liveStores={liveStores}
+        presetCode={presetCode}
+        presetMonth={presetMonth}
         onSubmit={handleSubmit}
       />
 
@@ -743,14 +897,19 @@ function MediaSpendForm({
   open,
   onOpenChange,
   editing,
+  liveStores,
+  presetCode,
+  presetMonth,
   onSubmit,
 }: {
   open: boolean
   onOpenChange: (v: boolean) => void
   editing: MediaSpend | null
+  liveStores: LiveSpotlightStore[]
+  presetCode: string | null
+  presetMonth: string | null
   onSubmit: (values: Record<string, string | null>) => Promise<void>
 }) {
-  const [recordType, setRecordType] = useState<RecordType>('Spotlight')
   const [recordCode, setRecordCode] = useState('')
   const [month, setMonth] = useState(currentMonth())
   const [metaAllocated, setMetaAllocated] = useState('')
@@ -760,20 +919,39 @@ function MediaSpendForm({
   const [notes, setNotes] = useState('')
   const [submitting, setSubmitting] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const [storePickerOpen, setStorePickerOpen] = useState(false)
+  const [manualEntry, setManualEntry] = useState(false)
 
   useEffect(() => {
     if (open) {
-      setRecordType(editing?.recordType ?? 'Spotlight')
-      setRecordCode(editing?.recordCode ?? '')
-      setMonth(editing?.month ?? currentMonth())
+      setRecordCode(editing?.recordCode ?? presetCode ?? '')
+      setMonth(editing?.month ?? presetMonth ?? currentMonth())
       setMetaAllocated(editing ? String(editing.metaAllocated) : '')
       setMetaUtilized(editing ? String(editing.metaUtilized) : '')
       setGoogleAllocated(editing ? String(editing.googleAllocated) : '')
       setGoogleUtilized(editing ? String(editing.googleUtilized) : '')
       setNotes(editing?.notes ?? '')
       setError(null)
+      setStorePickerOpen(false)
+      // Fall back to manual entry when the code is not among live stores
+      setManualEntry(
+        !editing && !presetCode
+          ? false
+          : !liveStores.some((s) => s.code === (editing?.recordCode ?? presetCode))
+      )
     }
-  }, [open, editing])
+  }, [open, editing, presetCode, presetMonth, liveStores])
+
+  // Store options: all live Spotlight stores. When editing a record whose
+  // code is no longer live, include it so the current value stays visible.
+  const storeOptions: LiveSpotlightStore[] = (() => {
+    const base = [...liveStores]
+    if (recordCode && !base.some((s) => s.code === recordCode)) {
+      base.unshift({ code: recordCode, name: null, city: null, state: null, hasBudget: true })
+    }
+    return base.sort((a, b) => a.code.localeCompare(b.code))
+  })()
+  const selectedStore = storeOptions.find((s) => s.code === recordCode)
 
   // Live preview of pending = allocated - utilized (excludes prev. month balance
   // which is added by the backend automatically)
@@ -783,14 +961,14 @@ function MediaSpendForm({
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault()
     if (!recordCode.trim() || !month.trim()) {
-      setError('Location Code and Month are required')
+      setError('Store Code and Month are required')
       return
     }
     setSubmitting(true)
     setError(null)
     try {
       await onSubmit({
-        recordType,
+        recordType: 'Spotlight',
         recordCode,
         month,
         metaAllocated: metaAllocated || null,
@@ -821,18 +999,104 @@ function MediaSpendForm({
           </DialogDescription>
         </DialogHeader>
         <form onSubmit={handleSubmit} className="space-y-4">
-          <div className="grid grid-cols-2 gap-4">
-            <div className="space-y-1.5">
-              <Label className="text-xs font-medium">Location Type *</Label>
-              <Select value={recordType} onValueChange={(v) => setRecordType(v as RecordType)}>
-                <SelectTrigger>
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="SI">SI</SelectItem>
-                  <SelectItem value="Spotlight">Spotlight</SelectItem>
-                </SelectContent>
-              </Select>
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <div className="space-y-1.5 sm:col-span-2">
+              <div className="flex items-center justify-between">
+                <Label className="text-xs font-medium">
+                  Spotlight Store <span className="text-muted-foreground">(live/active)</span> *
+                </Label>
+                <button
+                  type="button"
+                  className="inline-flex items-center gap-1 text-[11px] text-muted-foreground hover:text-foreground underline-offset-2 hover:underline"
+                  onClick={() => setManualEntry((m) => !m)}
+                >
+                  <Keyboard className="h-3 w-3" />
+                  {manualEntry ? 'Pick from list' : 'Enter code manually'}
+                </button>
+              </div>
+              {manualEntry ? (
+                <Input
+                  value={recordCode}
+                  onChange={(e) => setRecordCode(e.target.value)}
+                  placeholder="Spotlight Client Code, e.g. PU09A"
+                  className="font-mono"
+                />
+              ) : (
+                <Popover open={storePickerOpen} onOpenChange={setStorePickerOpen}>
+                  <PopoverTrigger asChild>
+                    <Button
+                      type="button"
+                      variant="outline"
+                      role="combobox"
+                      aria-expanded={storePickerOpen}
+                      className="w-full justify-between font-normal"
+                    >
+                      <span className="flex items-center gap-2 min-w-0">
+                        {selectedStore ? (
+                          <>
+                            <span className="font-mono text-xs font-semibold">{selectedStore.code}</span>
+                            <span className="text-muted-foreground truncate text-xs">
+                              {selectedStore.name ?? selectedStore.city ?? ''}
+                            </span>
+                          </>
+                        ) : (
+                          <span className="text-muted-foreground">
+                            Select a live Spotlight store ({liveStores.length} active)...
+                          </span>
+                        )}
+                      </span>
+                      <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+                    </Button>
+                  </PopoverTrigger>
+                  <PopoverContent className="w-[--radix-popover-trigger-width] p-0" align="start">
+                    <Command>
+                      <CommandInput placeholder="Search store code, name, city..." />
+                      <CommandList>
+                        <CommandEmpty>No live Spotlight store found.</CommandEmpty>
+                        <CommandGroup>
+                          {storeOptions.map((s) => (
+                            <CommandItem
+                              key={s.code}
+                              value={`${s.code} ${s.name ?? ''} ${s.city ?? ''} ${s.state ?? ''}`}
+                              onSelect={() => {
+                                setRecordCode(s.code)
+                                setStorePickerOpen(false)
+                              }}
+                            >
+                              <Check
+                                className={cn(
+                                  'mr-2 h-4 w-4 shrink-0',
+                                  recordCode === s.code ? 'opacity-100' : 'opacity-0'
+                                )}
+                              />
+                              <div className="flex min-w-0 flex-col">
+                                <span className="font-mono text-xs font-semibold">{s.code}</span>
+                                <span className="truncate text-[11px] text-muted-foreground">
+                                  {[s.name, s.city, s.state].filter(Boolean).join(' · ') || '—'}
+                                </span>
+                              </div>
+                              <span
+                                className={cn(
+                                  'ml-auto shrink-0 rounded-full px-1.5 py-0.5 text-[9px] font-medium',
+                                  s.hasBudget
+                                    ? 'bg-emerald-500/10 text-emerald-700'
+                                    : 'bg-amber-500/10 text-amber-700'
+                                )}
+                              >
+                                {s.hasBudget ? 'budgeted' : 'no budget'}
+                              </span>
+                            </CommandItem>
+                          ))}
+                        </CommandGroup>
+                      </CommandList>
+                    </Command>
+                  </PopoverContent>
+                </Popover>
+              )}
+              <p className="text-[10px] text-muted-foreground">
+                Only stores that are active (live) in Spotlight are listed. Media
+                spend is tracked per Spotlight location.
+              </p>
             </div>
             <div className="space-y-1.5">
               <Label className="text-xs font-medium">Month *</Label>
@@ -849,17 +1113,6 @@ function MediaSpendForm({
                 </SelectContent>
               </Select>
             </div>
-          </div>
-          <div className="space-y-1.5">
-            <Label htmlFor="recordCode" className="text-xs font-medium">
-              Location Code * <span className="text-muted-foreground">(SI Code or Spotlight Client Code)</span>
-            </Label>
-            <Input
-              id="recordCode"
-              value={recordCode}
-              onChange={(e) => setRecordCode(e.target.value)}
-              placeholder={recordType === 'SI' ? '10001' : 'PU09A'}
-            />
           </div>
 
           {/* Meta section */}

@@ -2,9 +2,10 @@ import { NextRequest, NextResponse } from 'next/server'
 import { db } from '@/lib/db'
 import type {
   MediaSpendInput,
-  PaginatedResponse,
   MediaSpend,
   RecordType,
+  LiveSpotlightStore,
+  MediaSpendListResponse,
 } from '@/lib/types'
 import { currentMonth, previousMonth, calculatePendingInWallet } from '@/lib/validation'
 
@@ -57,7 +58,10 @@ export async function GET(req: NextRequest) {
       return NextResponse.json({ data: all })
     }
 
-    const [total, data] = await Promise.all([
+    // All live Spotlight stores — media spend is tracked per live Spotlight
+    // location, so expose every active store code alongside the entries.
+    const effectiveMonth = month || currentMonth()
+    const [total, data, liveStores, monthEntries] = await Promise.all([
       db.mediaSpend.count({ where }),
       db.mediaSpend.findMany({
         where,
@@ -65,14 +69,41 @@ export async function GET(req: NextRequest) {
         skip: (page - 1) * pageSize,
         take: pageSize,
       }),
+      db.spotlightRecord.findMany({
+        where: { isLive: true },
+        select: { clientCode: true, name: true, city: true, state: true },
+        orderBy: { clientCode: 'asc' },
+      }),
+      db.mediaSpend.findMany({
+        where: { month: effectiveMonth },
+        select: { recordCode: true },
+      }),
     ])
 
-    const res: PaginatedResponse<MediaSpend> = {
+    const codesWithBudget = new Set(monthEntries.map((m) => m.recordCode))
+    const liveSpotlightStores: LiveSpotlightStore[] = liveStores.map((s) => ({
+      code: s.clientCode,
+      name: s.name,
+      city: s.city,
+      state: s.state,
+      hasBudget: codesWithBudget.has(s.clientCode),
+    }))
+    const withBudget = liveSpotlightStores.filter((s) => s.hasBudget).length
+    const liveSpotlightSummary = {
+      month: effectiveMonth,
+      total: liveSpotlightStores.length,
+      withBudget,
+      withoutBudget: liveSpotlightStores.length - withBudget,
+    }
+
+    const res: MediaSpendListResponse = {
       data: data as unknown as MediaSpend[],
       total,
       page,
       pageSize,
       totalPages: Math.ceil(total / pageSize),
+      liveSpotlightStores,
+      liveSpotlightSummary,
     }
     return NextResponse.json(res)
   } catch (e) {

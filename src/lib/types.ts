@@ -196,6 +196,27 @@ export interface MediaSpendInput {
   notes?: string | null;
 }
 
+/** A live (active) Spotlight store shown in the Media Spend section. */
+export interface LiveSpotlightStore {
+  code: string;
+  name: string | null;
+  city: string | null;
+  state: string | null;
+  hasBudget: boolean; // has a media spend entry for the reference month
+}
+
+export interface LiveSpotlightSummary {
+  month: string;
+  total: number;
+  withBudget: number;
+  withoutBudget: number;
+}
+
+export interface MediaSpendListResponse extends PaginatedResponse<MediaSpend> {
+  liveSpotlightStores?: LiveSpotlightStore[];
+  liveSpotlightSummary?: LiveSpotlightSummary;
+}
+
 export interface PlatformFee {
   id: string;
   recordType: RecordType;
