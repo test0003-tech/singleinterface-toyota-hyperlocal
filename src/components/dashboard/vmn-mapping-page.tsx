@@ -46,6 +46,7 @@ import {
   XCircle,
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
+import { VmnDataTab } from '@/components/dashboard/vmn-data-tab'
 
 // ---- Types (mirror the API response) ----
 
@@ -466,13 +467,22 @@ export function VmnMappingPage() {
       ) : (
         data && (
           <Tabs defaultValue="mappings" className="w-full">
-            <TabsList className="w-full sm:w-auto grid grid-cols-3 sm:flex">
+            <TabsList className="w-full sm:w-auto grid grid-cols-4 sm:flex">
               <TabsTrigger value="mappings" className="gap-1.5">
                 <Link2 className="h-3.5 w-3.5" />
                 <span className="hidden sm:inline">VMN Mapping</span>
                 <span className="sm:hidden">Mapping</span>
                 <Badge variant="secondary" className="ml-1 h-5 px-1.5 text-[10px]">
                   {data.summary.matchedPairs + data.summary.unmatchedSI}
+                </Badge>
+              </TabsTrigger>
+              <TabsTrigger value="vmn-data" className="gap-1.5">
+                <PhoneCall className="h-3.5 w-3.5" />
+                <span className="hidden sm:inline">VMN Data</span>
+                <span className="sm:hidden">VMNs</span>
+                <Badge variant="secondary" className="ml-1 h-5 px-1.5 text-[10px]">
+                  <Radio className="h-2.5 w-2.5 mr-0.5 text-emerald-600" />
+                  Live
                 </Badge>
               </TabsTrigger>
               <TabsTrigger value="extra-spotlight" className="gap-1.5">
@@ -596,7 +606,12 @@ export function VmnMappingPage() {
               </Card>
             </TabsContent>
 
-            {/* ---- Tab 2: Extra Spotlight stores (store code missing) ---- */}
+            {/* ---- Tab 2: VMN Data (import / delete / live status) ---- */}
+            <TabsContent value="vmn-data" className="mt-4">
+              <VmnDataTab />
+            </TabsContent>
+
+            {/* ---- Tab 3: Extra Spotlight stores (store code missing) ---- */}
             <TabsContent value="extra-spotlight" className="mt-4">
               <Card className="shadow-sm border-rose-500/30">
                 <CardContent className="p-4">
@@ -691,7 +706,7 @@ export function VmnMappingPage() {
               </Card>
             </TabsContent>
 
-            {/* ---- Tab 3: Extra VMNs available to map ---- */}
+            {/* ---- Tab 4: Extra VMNs available to map ---- */}
             <TabsContent value="extra-vmns" className="mt-4">
               <Card className="shadow-sm border-primary/30">
                 <CardContent className="p-4">
