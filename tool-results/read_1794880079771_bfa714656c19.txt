@@ -1,0 +1,1322 @@
+     1→'use client'
+     2→
+     3→import { useState, useEffect, useCallback, useRef } from 'react'
+     4→import { Input } from '@/components/ui/input'
+     5→import { Button } from '@/components/ui/button'
+     6→import { Label } from '@/components/ui/label'
+     7→import { Textarea } from '@/components/ui/textarea'
+     8→import { Badge } from '@/components/ui/badge'
+     9→import { Card, CardContent } from '@/components/ui/card'
+    10→import {
+    11→  Select,
+    12→  SelectContent,
+    13→  SelectItem,
+    14→  SelectTrigger,
+    15→  SelectValue,
+    16→} from '@/components/ui/select'
+    17→import {
+    18→  Table,
+    19→  TableBody,
+    20→  TableCell,
+    21→  TableHead,
+    22→  TableHeader,
+    23→  TableRow,
+    24→} from '@/components/ui/table'
+    25→import {
+    26→  Pagination,
+    27→  PaginationContent,
+    28→  PaginationItem,
+    29→  PaginationNext,
+    30→  PaginationPrevious,
+    31→} from '@/components/ui/pagination'
+    32→import {
+    33→  Dialog,
+    34→  DialogContent,
+    35→  DialogDescription,
+    36→  DialogFooter,
+    37→  DialogHeader,
+    38→  DialogTitle,
+    39→} from '@/components/ui/dialog'
+    40→import {
+    41→  AlertDialog,
+    42→  AlertDialogAction,
+    43→  AlertDialogCancel,
+    44→  AlertDialogContent,
+    45→  AlertDialogDescription,
+    46→  AlertDialogFooter,
+    47→  AlertDialogHeader,
+    48→  AlertDialogTitle,
+    49→} from '@/components/ui/alert-dialog'
+    50→import {
+    51→  DropdownMenu,
+    52→  DropdownMenuContent,
+    53→  DropdownMenuItem,
+    54→  DropdownMenuSeparator,
+    55→  DropdownMenuTrigger,
+    56→} from '@/components/ui/dropdown-menu'
+    57→import {
+    58→  Popover,
+    59→  PopoverContent,
+    60→  PopoverTrigger,
+    61→} from '@/components/ui/popover'
+    62→import {
+    63→  Command,
+    64→  CommandEmpty,
+    65→  CommandGroup,
+    66→  CommandInput,
+    67→  CommandItem,
+    68→  CommandList,
+    69→} from '@/components/ui/command'
+    70→import { Separator } from '@/components/ui/separator'
+    71→import { Skeleton } from '@/components/ui/skeleton'
+    72→import { cn } from '@/lib/utils'
+    73→import {
+    74→  Search,
+    75→  Plus,
+    76→  Pencil,
+    77→  Trash2,
+    78→  Download,
+    79→  MoreHorizontal,
+    80→  Loader2,
+    81→  Wallet,
+    82→  TrendingDown,
+    83→  PiggyBank,
+    84→  Upload,
+    85→  Facebook,
+    86→  Chrome,
+    87→  Store,
+    88→  CheckCircle2,
+    89→  AlertTriangle,
+    90→  ChevronsUpDown,
+    91→  Check,
+    92→  Keyboard,
+    93→} from 'lucide-react'
+    94→import { useToast } from '@/hooks/use-toast'
+    95→import {
+    96→  listMediaSpend,
+    97→  createMediaSpend,
+    98→  updateMediaSpend,
+    99→  deleteMediaSpend,
+   100→  exportMediaSpend,
+   101→  getStats,
+   102→  importMediaSpendFile,
+   103→} from '@/lib/api'
+   104→import type { MediaSpend, RecordType, LiveSpotlightStore, LiveSpotlightSummary } from '@/lib/types'
+   105→import { currentMonth, formatMonth, recentMonths, formatCurrency } from '@/lib/validation'
+   106→import { FinanceImportDialog } from './finance-import-dialog'
+   107→
+   108→const PAGE_SIZE_OPTIONS = [10, 25, 50, 100]
+   109→
+   110→// Meta = Facebook blue, Google = Google red, Total = neutral emerald
+   111→const META_ACCENT = 'bg-blue-500/10 text-blue-600'
+   112→const GOOGLE_ACCENT = 'bg-red-500/10 text-red-600'
+   113→const TOTAL_ACCENT = 'bg-emerald-500/10 text-emerald-600'
+   114→
+   115→export function MediaSpendTab({ refreshKey }: { refreshKey: number }) {
+   116→  const { toast } = useToast()
+   117→  const [search, setSearch] = useState('')
+   118→  const [debouncedSearch, setDebouncedSearch] = useState('')
+   119→  const [page, setPage] = useState(1)
+   120→  const [pageSize, setPageSize] = useState(10)
+   121→  const [monthFilter, setMonthFilter] = useState('')
+   122→  const [loading, setLoading] = useState(true)
+   123→  const [data, setData] = useState<{ data: MediaSpend[]; total: number; totalPages: number } | null>(null)
+   124→  const [summary, setSummary] = useState<{
+   125→    metaAllocated: number
+   126→    metaUtilized: number
+   127→    metaPending: number
+   128→    googleAllocated: number
+   129→    googleUtilized: number
+   130→    googlePending: number
+   131→    totalAllocated: number
+   132→    totalUtilized: number
+   133→    totalPending: number
+   134→  } | null>(null)
+   135→
+   136→  const [formOpen, setFormOpen] = useState(false)
+   137→  const [editing, setEditing] = useState<MediaSpend | null>(null)
+   138→  const [presetCode, setPresetCode] = useState<string | null>(null)
+   139→  const [presetMonth, setPresetMonth] = useState<string | null>(null)
+   140→  const [liveStores, setLiveStores] = useState<LiveSpotlightStore[]>([])
+   141→  const [liveSummary, setLiveSummary] = useState<LiveSpotlightSummary | null>(null)
+   142→  const [showMissing, setShowMissing] = useState(false)
+   143→  const [missingSearch, setMissingSearch] = useState('')
+   144→  const [deleteTarget, setDeleteTarget] = useState<MediaSpend | null>(null)
+   145→  const [deleting, setDeleting] = useState(false)
+   146→  const [exporting, setExporting] = useState(false)
+   147→  const [importOpen, setImportOpen] = useState(false)
+   148→
+   149→  const searchTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
+   150→  useEffect(() => {
+   151→    if (searchTimer.current) clearTimeout(searchTimer.current)
+   152→    searchTimer.current = setTimeout(() => {
+   153→      setDebouncedSearch(search)
+   154→      setPage(1)
+   155→    }, 350)
+   156→    return () => {
+   157→      if (searchTimer.current) clearTimeout(searchTimer.current)
+   158→    }
+   159→  }, [search])
+   160→
+   161→  const fetchData = useCallback(async () => {
+   162→    setLoading(true)
+   163→    try {
+   164→      const res = await listMediaSpend({
+   165→        page,
+   166→        pageSize,
+   167→        search: debouncedSearch,
+   168→        month: monthFilter,
+   169→      })
+   170→      setData({
+   171→        data: res.data,
+   172→        total: res.total,
+   173→        totalPages: res.totalPages,
+   174→      })
+   175→      setLiveStores(res.liveSpotlightStores ?? [])
+   176→      setLiveSummary(res.liveSpotlightSummary ?? null)
+   177→    } catch (e) {
+   178→      toast({
+   179→        title: 'Error',
+   180→        description: e instanceof Error ? e.message : 'Failed to load data',
+   181→        variant: 'destructive',
+   182→      })
+   183→      setData(null)
+   184→    } finally {
+   185→      setLoading(false)
+   186→    }
+   187→  }, [page, pageSize, debouncedSearch, monthFilter, toast])
+   188→
+   189→  useEffect(() => {
+   190→    fetchData()
+   191→  }, [fetchData])
+   192→
+   193→  // Fetch summary
+   194→  const [statsLoadedKey, setStatsLoadedKey] = useState<number | null>(null)
+   195→  const [localRefresh, setLocalRefresh] = useState(0)
+   196→  const statsKey = `${refreshKey}-${localRefresh}`
+   197→  const statsLoading = statsLoadedKey !== statsKey
+   198→  const triggerStatsRefresh = useCallback(() => {
+   199→    setLocalRefresh((n) => n + 1)
+   200→  }, [])
+   201→  useEffect(() => {
+   202→    let cancelled = false
+   203→    getStats()
+   204→      .then((s) => {
+   205→        if (!cancelled) {
+   206→          const ms = s.mediaSpend
+   207→          setSummary({
+   208→            metaAllocated: ms.metaAllocated ?? 0,
+   209→            metaUtilized: ms.metaUtilized ?? 0,
+   210→            metaPending: ms.metaPending ?? 0,
+   211→            googleAllocated: ms.googleAllocated ?? 0,
+   212→            googleUtilized: ms.googleUtilized ?? 0,
+   213→            googlePending: ms.googlePending ?? 0,
+   214→            totalAllocated: ms.totalAllocated ?? 0,
+   215→            totalUtilized: ms.totalUtilized ?? 0,
+   216→            totalPending: ms.totalPending ?? 0,
+   217→          })
+   218→          setStatsLoadedKey(statsKey)
+   219→        }
+   220→      })
+   221→      .catch(() => {
+   222→        if (!cancelled) setStatsLoadedKey(statsKey)
+   223→      })
+   224→    return () => {
+   225→      cancelled = true
+   226→    }
+   227→  }, [statsKey])
+   228→
+   229→  function openAdd() {
+   230→    setEditing(null)
+   231→    setPresetCode(null)
+   232→    setPresetMonth(null)
+   233→    setFormOpen(true)
+   234→  }
+   235→
+   236→  function openAddFor(code: string, month?: string) {
+   237→    setEditing(null)
+   238→    setPresetCode(code)
+   239→    setPresetMonth(month ?? null)
+   240→    setFormOpen(true)
+   241→  }
+   242→
+   243→  function openEdit(row: MediaSpend) {
+   244→    setEditing(row)
+   245→    setFormOpen(true)
+   246→  }
+   247→
+   248→  async function handleSubmit(values: Record<string, string | null>) {
+   249→    const payload = {
+   250→      recordType: (values.recordType as RecordType) || 'Spotlight',
+   251→      recordCode: values.recordCode ?? '',
+   252→      month: values.month ?? currentMonth(),
+   253→      metaAllocated: values.metaAllocated ? parseFloat(values.metaAllocated) : 0,
+   254→      metaUtilized: values.metaUtilized ? parseFloat(values.metaUtilized) : 0,
+   255→      googleAllocated: values.googleAllocated ? parseFloat(values.googleAllocated) : 0,
+   256→      googleUtilized: values.googleUtilized ? parseFloat(values.googleUtilized) : 0,
+   257→      notes: values.notes ?? null,
+   258→    }
+   259→    if (!payload.recordCode || !payload.month) {
+   260→      throw new Error('Location Code and Month are required')
+   261→    }
+   262→    if (editing) {
+   263→      await updateMediaSpend(editing.id, payload)
+   264→      toast({ title: 'Updated', description: 'Media spend record updated' })
+   265→    } else {
+   266→      await createMediaSpend(payload)
+   267→      toast({ title: 'Created', description: 'Media spend record created' })
+   268→    }
+   269→    await fetchData()
+   270→    triggerStatsRefresh()
+   271→  }
+   272→
+   273→  async function confirmDelete() {
+   274→    if (!deleteTarget) return
+   275→    setDeleting(true)
+   276→    try {
+   277→      await deleteMediaSpend(deleteTarget.id)
+   278→      toast({ title: 'Deleted', description: 'Record deleted' })
+   279→      setDeleteTarget(null)
+   280→      await fetchData()
+   281→      triggerStatsRefresh()
+   282→    } catch (e) {
+   283→      toast({
+   284→        title: 'Delete failed',
+   285→        description: e instanceof Error ? e.message : 'Error',
+   286→        variant: 'destructive',
+   287→      })
+   288→    } finally {
+   289→      setDeleting(false)
+   290→    }
+   291→  }
+   292→
+   293→  async function handleExport() {
+   294→    setExporting(true)
+   295→    try {
+   296→      const res = await exportMediaSpend({
+   297→        search: debouncedSearch,
+   298→        month: monthFilter,
+   299→      })
+   300→      downloadCSV(res.data, 'media-spend.csv')
+   301→      toast({ title: 'Exported', description: 'CSV downloaded' })
+   302→    } catch (e) {
+   303→      toast({
+   304→        title: 'Export failed',
+   305→        description: e instanceof Error ? e.message : 'Error',
+   306→        variant: 'destructive',
+   307→      })
+   308→    } finally {
+   309→      setExporting(false)
+   310→    }
+   311→  }
+   312→
+   313→  const monthOptions = recentMonths(12)
+   314→
+   315→  const missingStores = liveStores
+   316→    .filter((s) => !s.hasBudget)
+   317→    .filter((s) => {
+   318→      if (!missingSearch.trim()) return true
+   319→      const q = missingSearch.trim().toLowerCase()
+   320→      return (
+   321→        s.code.toLowerCase().includes(q) ||
+   322→        (s.name ?? '').toLowerCase().includes(q) ||
+   323→        (s.city ?? '').toLowerCase().includes(q) ||
+   324→        (s.state ?? '').toLowerCase().includes(q)
+   325→      )
+   326→    })
+   327→
+   328→  const total = data?.total ?? 0
+   329→  const totalPages = data?.totalPages ?? 0
+   330→  const startIdx = total === 0 ? 0 : (page - 1) * pageSize + 1
+   331→  const endIdx = Math.min(page * pageSize, total)
+   332→
+   333→  return (
+   334→    <div className="space-y-4">
+   335→      <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+   336→        <div>
+   337→          <h2 className="text-xl font-semibold tracking-tight">Media Spend</h2>
+   338→          <p className="text-sm text-muted-foreground mt-0.5">
+   339→            Track monthly Meta and Google ad spend per location - allocated
+   340→            budget, utilized amount, and wallet balance carried forward.
+   341→          </p>
+   342→        </div>
+   343→        <div className="flex flex-wrap items-center gap-2">
+   344→          <Button
+   345→            variant="outline"
+   346→            size="sm"
+   347→            onClick={() => setImportOpen(true)}
+   348→            disabled={loading}
+   349→          >
+   350→            <Upload className="mr-2 h-4 w-4" />
+   351→            Import
+   352→          </Button>
+   353→          <Button
+   354→            variant="outline"
+   355→            size="sm"
+   356→            onClick={handleExport}
+   357→            disabled={exporting || loading}
+   358→          >
+   359→            {exporting ? (
+   360→              <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+   361→            ) : (
+   362→              <Download className="mr-2 h-4 w-4" />
+   363→            )}
+   364→            Export CSV
+   365→          </Button>
+   366→          <Button size="sm" onClick={openAdd}>
+   367→            <Plus className="mr-2 h-4 w-4" />
+   368→            Add Entry
+   369→          </Button>
+   370→        </div>
+   371→      </div>
+   372→
+   373→      {/* Summary cards: Meta / Google / Total */}
+   374→      <div className="space-y-4">
+   375→        {/* Meta row */}
+   376→        <div className="space-y-1.5">
+   377→          <div className="flex items-center gap-1.5 text-xs font-semibold text-blue-700">
+   378→            <Facebook className="h-3.5 w-3.5" />
+   379→            <span>META</span>
+   380→          </div>
+   381→          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+   382→            <SummaryCard
+   383→              title="Meta Allocated"
+   384→              value={summary?.metaAllocated ?? 0}
+   385→              icon={<Wallet className="h-5 w-5" />}
+   386→              accent={META_ACCENT}
+   387→              loading={statsLoading}
+   388→            />
+   389→            <SummaryCard
+   390→              title="Meta Utilized"
+   391→              value={summary?.metaUtilized ?? 0}
+   392→              icon={<TrendingDown className="h-5 w-5" />}
+   393→              accent={META_ACCENT}
+   394→              loading={statsLoading}
+   395→            />
+   396→            <SummaryCard
+   397→              title="Meta Pending Wallet"
+   398→              value={summary?.metaPending ?? 0}
+   399→              icon={<PiggyBank className="h-5 w-5" />}
+   400→              accent={META_ACCENT}
+   401→              loading={statsLoading}
+   402→            />
+   403→          </div>
+   404→        </div>
+   405→
+   406→        {/* Google row */}
+   407→        <div className="space-y-1.5">
+   408→          <div className="flex items-center gap-1.5 text-xs font-semibold text-red-700">
+   409→            <Chrome className="h-3.5 w-3.5" />
+   410→            <span>GOOGLE</span>
+   411→          </div>
+   412→          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+   413→            <SummaryCard
+   414→              title="Google Allocated"
+   415→              value={summary?.googleAllocated ?? 0}
+   416→              icon={<Wallet className="h-5 w-5" />}
+   417→              accent={GOOGLE_ACCENT}
+   418→              loading={statsLoading}
+   419→            />
+   420→            <SummaryCard
+   421→              title="Google Utilized"
+   422→              value={summary?.googleUtilized ?? 0}
+   423→              icon={<TrendingDown className="h-5 w-5" />}
+   424→              accent={GOOGLE_ACCENT}
+   425→              loading={statsLoading}
+   426→            />
+   427→            <SummaryCard
+   428→              title="Google Pending Wallet"
+   429→              value={summary?.googlePending ?? 0}
+   430→              icon={<PiggyBank className="h-5 w-5" />}
+   431→              accent={GOOGLE_ACCENT}
+   432→              loading={statsLoading}
+   433→            />
+   434→          </div>
+   435→        </div>
+   436→
+   437→        {/* Total row */}
+   438→        <div className="space-y-1.5">
+   439→          <div className="flex items-center gap-1.5 text-xs font-semibold text-emerald-700">
+   440→            <Wallet className="h-3.5 w-3.5" />
+   441→            <span>TOTAL</span>
+   442→          </div>
+   443→          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+   444→            <SummaryCard
+   445→              title="Total Allocated"
+   446→              value={summary?.totalAllocated ?? 0}
+   447→              icon={<Wallet className="h-5 w-5" />}
+   448→              accent={TOTAL_ACCENT}
+   449→              loading={statsLoading}
+   450→            />
+   451→            <SummaryCard
+   452→              title="Total Utilized"
+   453→              value={summary?.totalUtilized ?? 0}
+   454→              icon={<TrendingDown className="h-5 w-5" />}
+   455→              accent={TOTAL_ACCENT}
+   456→              loading={statsLoading}
+   457→            />
+   458→            <SummaryCard
+   459→              title="Total Pending Wallet"
+   460→              value={summary?.totalPending ?? 0}
+   461→              icon={<PiggyBank className="h-5 w-5" />}
+   462→              accent={TOTAL_ACCENT}
+   463→              loading={statsLoading}
+   464→            />
+   465→          </div>
+   466→        </div>
+   467→      </div>
+   468→
+   469→      {/* Live Spotlight stores coverage */}
+   470→      <Card>
+   471→        <CardContent className="pt-5">
+   472→          <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
+   473→            <div className="flex flex-wrap items-center gap-x-4 gap-y-2">
+   474→              <div className="flex items-center gap-2">
+   475→                <div className="rounded-lg p-1.5 bg-emerald-500/10 text-emerald-600">
+   476→                  <Store className="h-4 w-4" />
+   477→                </div>
+   478→                <div className="text-sm">
+   479→                  <span className="font-bold">{liveSummary?.total ?? liveStores.length}</span>{' '}
+   480→                  <span className="text-muted-foreground">live Spotlight stores</span>
+   481→                </div>
+   482→              </div>
+   483→              <Separator orientation="vertical" className="h-6 hidden sm:block" />
+   484→              <div className="flex items-center gap-2">
+   485→                <CheckCircle2 className="h-4 w-4 text-emerald-600 shrink-0" />
+   486→                <div className="text-sm">
+   487→                  <span className="font-bold text-emerald-700">{liveSummary?.withBudget ?? 0}</span>{' '}
+   488→                  <span className="text-muted-foreground">
+   489→                    with budget{liveSummary ? ` for ${formatMonth(liveSummary.month)}` : ''}
+   490→                  </span>
+   491→                </div>
+   492→              </div>
+   493→              <Separator orientation="vertical" className="h-6 hidden sm:block" />
+   494→              <div className="flex items-center gap-2">
+   495→                <AlertTriangle className="h-4 w-4 text-amber-600 shrink-0" />
+   496→                <div className="text-sm">
+   497→                  <span className="font-bold text-amber-700">{liveSummary?.withoutBudget ?? 0}</span>{' '}
+   498→                  <span className="text-muted-foreground">missing budget</span>
+   499→                </div>
+   500→              </div>
+   501→            </div>
+   502→            <Button
+   503→              variant="outline"
+   504→              size="sm"
+   505→              onClick={() => setShowMissing((s) => !s)}
+   506→            >
+   507→              {showMissing ? 'Hide' : 'View'} stores without budget
+   508→            </Button>
+   509→          </div>
+   510→
+   511→          {showMissing && (
+   512→            <div className="mt-4 border-t pt-4 space-y-3">
+   513→              <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+   514→                <p className="text-xs text-muted-foreground">
+   515→                  All live Spotlight store codes without a media budget
+   516→                  {liveSummary ? ` for ${formatMonth(liveSummary.month)}` : ''}. Click{' '}
+   517→                  <Plus className="inline h-3 w-3" /> to add their budget.
+   518→                </p>
+   519→                <div className="relative w-full sm:w-64">
+   520→                  <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground" />
+   521→                  <Input
+   522→                    placeholder="Filter stores..."
+   523→                    value={missingSearch}
+   524→                    onChange={(e) => setMissingSearch(e.target.value)}
+   525→                    className="h-8 pl-8 text-xs"
+   526→                  />
+   527→                </div>
+   528→              </div>
+   529→              <div className="max-h-72 overflow-y-auto custom-scrollbar">
+   530→                {missingStores.length === 0 ? (
+   531→                  <p className="text-sm text-muted-foreground py-2">
+   532→                    All live Spotlight stores have a budget entry
+   533→                    {liveSummary ? ` for ${formatMonth(liveSummary.month)}` : ''}.
+   534→                  </p>
+   535→                ) : (
+   536→                  <div className="flex flex-wrap gap-2">
+   537→                    {missingStores.map((s) => (
+   538→                      <div
+   539→                        key={s.code}
+   540→                        className="group flex items-center gap-2 rounded-full border bg-muted/30 pl-3 pr-1 py-1 hover:border-primary/40 hover:bg-muted/60"
+   541→                      >
+   542→                        <div className="flex flex-col leading-tight">
+   543→                          <span className="font-mono text-[11px] font-semibold">{s.code}</span>
+   544→                          {s.name && (
+   545→                            <span className="text-[10px] text-muted-foreground max-w-[200px] truncate">
+   546→                              {s.name}
+   547→                            </span>
+   548→                          )}
+   549→                        </div>
+   550→                        <Button
+   551→                          size="icon"
+   552→                          variant="ghost"
+   553→                          className="h-6 w-6 rounded-full"
+   554→                          title={`Add media budget for ${s.code}`}
+   555→                          onClick={() => openAddFor(s.code, liveSummary?.month)}
+   556→                        >
+   557→                          <Plus className="h-3.5 w-3.5" />
+   558→                        </Button>
+   559→                      </div>
+   560→                    ))}
+   561→                  </div>
+   562→                )}
+   563→              </div>
+   564→            </div>
+   565→          )}
+   566→        </CardContent>
+   567→      </Card>
+   568→
+   569→      {/* Filters */}
+   570→      <div className="flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-center">
+   571→        <div className="relative flex-1 sm:min-w-[260px]">
+   572→          <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+   573→          <Input
+   574→            placeholder="Search by location code or notes..."
+   575→            value={search}
+   576→            onChange={(e) => setSearch(e.target.value)}
+   577→            className="pl-9"
+   578→          />
+   579→        </div>
+   580→        <Select value={monthFilter || '__all__'} onValueChange={(v) => { setMonthFilter(v === '__all__' ? '' : v); setPage(1) }}>
+   581→          <SelectTrigger className="w-[150px]">
+   582→            <SelectValue placeholder="Month" />
+   583→          </SelectTrigger>
+   584→          <SelectContent>
+   585→            <SelectItem value="__all__">All Months</SelectItem>
+   586→            {monthOptions.map((m) => (
+   587→              <SelectItem key={m} value={m}>
+   588→                {formatMonth(m)}
+   589→              </SelectItem>
+   590→            ))}
+   591→          </SelectContent>
+   592→        </Select>
+   593→      </div>
+   594→
+   595→      {/* Table */}
+   596→      <div className="rounded-lg border bg-card">
+   597→        <div className="overflow-x-auto">
+   598→          <Table>
+   599→            <TableHeader>
+   600→              <TableRow>
+   601→                <TableHead rowSpan={2} className="whitespace-nowrap align-bottom">Location</TableHead>
+   602→                <TableHead rowSpan={2} className="whitespace-nowrap align-bottom">Month</TableHead>
+   603→                <TableHead colSpan={3} className="text-center border-l border-r border-blue-200 bg-blue-500/5 text-blue-700">
+   604→                  <div className="flex items-center justify-center gap-1.5">
+   605→                    <Facebook className="h-3.5 w-3.5" />
+   606→                    <span>Meta</span>
+   607→                  </div>
+   608→                </TableHead>
+   609→                <TableHead colSpan={3} className="text-center border-l border-r border-red-200 bg-red-500/5 text-red-700">
+   610→                  <div className="flex items-center justify-center gap-1.5">
+   611→                    <Chrome className="h-3.5 w-3.5" />
+   612→                    <span>Google</span>
+   613→                  </div>
+   614→                </TableHead>
+   615→                <TableHead colSpan={3} className="text-center border-l border-r bg-muted/60">
+   616→                  <div className="flex items-center justify-center gap-1.5">
+   617→                    <Wallet className="h-3.5 w-3.5" />
+   618→                    <span>Total</span>
+   619→                  </div>
+   620→                </TableHead>
+   621→                <TableHead rowSpan={2} className="whitespace-nowrap align-bottom">Notes</TableHead>
+   622→                <TableHead rowSpan={2} className="w-[60px] text-right align-bottom">Actions</TableHead>
+   623→              </TableRow>
+   624→              <TableRow>
+   625→                {/* Meta sub-columns */}
+   626→                <TableHead className="text-right whitespace-nowrap bg-blue-500/5 text-blue-700 border-l border-blue-200">Allocated</TableHead>
+   627→                <TableHead className="text-right whitespace-nowrap bg-blue-500/5 text-blue-700">Utilized</TableHead>
+   628→                <TableHead className="text-right whitespace-nowrap bg-blue-500/5 text-blue-700 border-r border-blue-200">Pending</TableHead>
+   629→                {/* Google sub-columns */}
+   630→                <TableHead className="text-right whitespace-nowrap bg-red-500/5 text-red-700 border-l border-red-200">Allocated</TableHead>
+   631→                <TableHead className="text-right whitespace-nowrap bg-red-500/5 text-red-700">Utilized</TableHead>
+   632→                <TableHead className="text-right whitespace-nowrap bg-red-500/5 text-red-700 border-r border-red-200">Pending</TableHead>
+   633→                {/* Total sub-columns */}
+   634→                <TableHead className="text-right whitespace-nowrap bg-muted/60 border-l">Allocated</TableHead>
+   635→                <TableHead className="text-right whitespace-nowrap bg-muted/60">Utilized</TableHead>
+   636→                <TableHead className="text-right whitespace-nowrap bg-muted/60 border-r">Pending</TableHead>
+   637→              </TableRow>
+   638→            </TableHeader>
+   639→            <TableBody>
+   640→              {loading ? (
+   641→                Array.from({ length: 5 }).map((_, i) => (
+   642→                  <TableRow key={`s-${i}`}>
+   643→                    {Array.from({ length: 13 }).map((_, j) => (
+   644→                      <TableCell key={j}>
+   645→                        <Skeleton className="h-5 w-full max-w-[100px]" />
+   646→                      </TableCell>
+   647→                    ))}
+   648→                  </TableRow>
+   649→                ))
+   650→              ) : data && data.data.length > 0 ? (
+   651→                data.data.map((row) => {
+   652→                  const balance = row.allocated - row.utilized
+   653→                  return (
+   654→                    <TableRow key={row.id}>
+   655→                      <TableCell>
+   656→                        <div className="flex flex-col">
+   657→                          <span className="font-mono text-xs font-medium">
+   658→                            {row.recordCode}
+   659→                          </span>
+   660→                          <Badge
+   661→                            variant="outline"
+   662→                            className="text-[10px] w-fit mt-0.5"
+   663→                          >
+   664→                            {row.recordType}
+   665→                          </Badge>
+   666→                        </div>
+   667→                      </TableCell>
+   668→                      <TableCell className="whitespace-nowrap text-sm">
+   669→                        {formatMonth(row.month)}
+   670→                      </TableCell>
+   671→                      {/* Meta */}
+   672→                      <TableCell className="text-right whitespace-nowrap text-blue-700 border-l border-blue-200/60">
+   673→                        {formatCurrency(row.metaAllocated)}
+   674→                      </TableCell>
+   675→                      <TableCell className="text-right whitespace-nowrap text-blue-700">
+   676→                        {formatCurrency(row.metaUtilized)}
+   677→                      </TableCell>
+   678→                      <TableCell className="text-right whitespace-nowrap font-medium text-blue-700 border-r border-blue-200/60">
+   679→                        {formatCurrency(row.metaPendingInWallet)}
+   680→                      </TableCell>
+   681→                      {/* Google */}
+   682→                      <TableCell className="text-right whitespace-nowrap text-red-700 border-l border-red-200/60">
+   683→                        {formatCurrency(row.googleAllocated)}
+   684→                      </TableCell>
+   685→                      <TableCell className="text-right whitespace-nowrap text-red-700">
+   686→                        {formatCurrency(row.googleUtilized)}
+   687→                      </TableCell>
+   688→                      <TableCell className="text-right whitespace-nowrap font-medium text-red-700 border-r border-red-200/60">
+   689→                        {formatCurrency(row.googlePendingInWallet)}
+   690→                      </TableCell>
+   691→                      {/* Total */}
+   692→                      <TableCell className="text-right whitespace-nowrap font-medium text-emerald-700 border-l">
+   693→                        {formatCurrency(row.allocated)}
+   694→                      </TableCell>
+   695→                      <TableCell className="text-right whitespace-nowrap text-amber-700">
+   696→                        {formatCurrency(row.utilized)}
+   697→                      </TableCell>
+   698→                      <TableCell className="text-right whitespace-nowrap border-r">
+   699→                        <div className="flex flex-col items-end">
+   700→                          <span className="font-semibold">
+   701→                            {formatCurrency(row.pendingInWallet)}
+   702→                          </span>
+   703→                          <span
+   704→                            className={`text-[10px] ${
+   705→                              balance >= 0 ? 'text-emerald-600' : 'text-destructive'
+   706→                            }`}
+   707→                          >
+   708→                            {balance >= 0 ? 'surplus' : 'deficit'}{' '}
+   709→                            {formatCurrency(Math.abs(balance))}
+   710→                          </span>
+   711→                        </div>
+   712→                      </TableCell>
+   713→                      <TableCell className="max-w-[200px]">
+   714→                        <span className="text-xs text-muted-foreground line-clamp-2">
+   715→                          {row.notes ?? '—'}
+   716→                        </span>
+   717→                      </TableCell>
+   718→                      <TableCell className="text-right">
+   719→                        <DropdownMenu>
+   720→                          <DropdownMenuTrigger asChild>
+   721→                            <Button variant="ghost" size="icon" className="h-8 w-8">
+   722→                              <MoreHorizontal className="h-4 w-4" />
+   723→                            </Button>
+   724→                          </DropdownMenuTrigger>
+   725→                          <DropdownMenuContent align="end">
+   726→                            <DropdownMenuItem onClick={() => openEdit(row)}>
+   727→                              <Pencil className="mr-2 h-4 w-4" />
+   728→                              Edit
+   729→                            </DropdownMenuItem>
+   730→                            <DropdownMenuSeparator />
+   731→                            <DropdownMenuItem
+   732→                              onClick={() => setDeleteTarget(row)}
+   733→                              className="text-destructive focus:text-destructive"
+   734→                            >
+   735→                              <Trash2 className="mr-2 h-4 w-4" />
+   736→                              Delete
+   737→                            </DropdownMenuItem>
+   738→                          </DropdownMenuContent>
+   739→                        </DropdownMenu>
+   740→                      </TableCell>
+   741→                    </TableRow>
+   742→                  )
+   743→                })
+   744→              ) : (
+   745→                <TableRow>
+   746→                  <TableCell
+   747→                    colSpan={13}
+   748→                    className="h-32 text-center text-muted-foreground"
+   749→                  >
+   750→                    No media spend records found. Add a new entry to get started.
+   751→                  </TableCell>
+   752→                </TableRow>
+   753→              )}
+   754→            </TableBody>
+   755→          </Table>
+   756→        </div>
+   757→      </div>
+   758→
+   759→      {data && data.data.length > 0 && (
+   760→        <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+   761→          <div className="flex items-center gap-2 text-sm text-muted-foreground">
+   762→            <span>
+   763→              Showing {startIdx}-{endIdx} of {total} entries
+   764→            </span>
+   765→            <Select
+   766→              value={String(pageSize)}
+   767→              onValueChange={(v) => { setPageSize(Number(v)); setPage(1) }}
+   768→            >
+   769→              <SelectTrigger className="h-8 w-[80px]">
+   770→                <SelectValue />
+   771→              </SelectTrigger>
+   772→              <SelectContent>
+   773→                {PAGE_SIZE_OPTIONS.map((n) => (
+   774→                  <SelectItem key={n} value={String(n)}>
+   775→                    {n} / page
+   776→                  </SelectItem>
+   777→                ))}
+   778→              </SelectContent>
+   779→            </Select>
+   780→          </div>
+   781→          {totalPages > 1 && (
+   782→            <Pagination className="sm:justify-end">
+   783→              <PaginationContent>
+   784→                <PaginationItem>
+   785→                  <PaginationPrevious
+   786→                    onClick={() => setPage((p) => Math.max(1, p - 1))}
+   787→                    className={page === 1 ? 'pointer-events-none opacity-50' : 'cursor-pointer'}
+   788→                  />
+   789→                </PaginationItem>
+   790→                <PaginationItem className="px-3 text-sm">
+   791→                  Page {page} of {totalPages}
+   792→                </PaginationItem>
+   793→                <PaginationItem>
+   794→                  <PaginationNext
+   795→                    onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
+   796→                    className={page === totalPages ? 'pointer-events-none opacity-50' : 'cursor-pointer'}
+   797→                  />
+   798→                </PaginationItem>
+   799→              </PaginationContent>
+   800→            </Pagination>
+   801→          )}
+   802→        </div>
+   803→      )}
+   804→
+   805→      <MediaSpendForm
+   806→        open={formOpen}
+   807→        onOpenChange={setFormOpen}
+   808→        editing={editing}
+   809→        liveStores={liveStores}
+   810→        presetCode={presetCode}
+   811→        presetMonth={presetMonth}
+   812→        onSubmit={handleSubmit}
+   813→      />
+   814→
+   815→      <AlertDialog open={!!deleteTarget} onOpenChange={(v) => !v && setDeleteTarget(null)}>
+   816→        <AlertDialogContent>
+   817→          <AlertDialogHeader>
+   818→            <AlertDialogTitle>Delete this media spend entry?</AlertDialogTitle>
+   819→            <AlertDialogDescription>
+   820→              This action cannot be undone.
+   821→            </AlertDialogDescription>
+   822→          </AlertDialogHeader>
+   823→          <AlertDialogFooter>
+   824→            <AlertDialogCancel disabled={deleting}>Cancel</AlertDialogCancel>
+   825→            <AlertDialogAction
+   826→              onClick={(e) => { e.preventDefault(); confirmDelete() }}
+   827→              disabled={deleting}
+   828→              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+   829→            >
+   830→              {deleting && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+   831→              Delete
+   832→            </AlertDialogAction>
+   833→          </AlertDialogFooter>
+   834→        </AlertDialogContent>
+   835→      </AlertDialog>
+   836→
+   837→      <FinanceImportDialog
+   838→        open={importOpen}
+   839→        onOpenChange={setImportOpen}
+   840→        title="Import Media Spend"
+   841→        description="Upload an Excel/CSV file with per-location per-month Meta + Google ad budget. Each row matches a location + month and will be upserted."
+   842→        expectedColumns={[
+   843→          'Location Code',
+   844→          'Month',
+   845→          'Meta Allocated',
+   846→          'Meta Utilized',
+   847→          'Google Allocated',
+   848→          'Google Utilized',
+   849→          'Notes',
+   850→        ]}
+   851→        onImportFile={importMediaSpendFile}
+   852→        onImported={async () => {
+   853→          await fetchData()
+   854→          triggerStatsRefresh()
+   855→        }}
+   856→        downloadTemplate={downloadMediaSpendTemplate}
+   857→      />
+   858→    </div>
+   859→  )
+   860→}
+   861→
+   862→function SummaryCard({
+   863→  title,
+   864→  value,
+   865→  icon,
+   866→  accent,
+   867→  loading,
+   868→}: {
+   869→  title: string
+   870→  value: number
+   871→  icon: React.ReactNode
+   872→  accent: string
+   873→  loading: boolean
+   874→}) {
+   875→  return (
+   876→    <Card>
+   877→      <CardContent className="pt-5">
+   878→        <div className="flex items-center justify-between">
+   879→          <div>
+   880→            <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide">
+   881→              {title}
+   882→            </p>
+   883→            {loading ? (
+   884→              <Skeleton className="h-7 w-28 mt-1.5" />
+   885→            ) : (
+   886→              <p className="text-xl font-bold mt-1">{formatCurrency(value)}</p>
+   887→            )}
+   888→          </div>
+   889→          <div className={`rounded-lg p-2 ${accent}`}>{icon}</div>
+   890→        </div>
+   891→      </CardContent>
+   892→    </Card>
+   893→  )
+   894→}
+   895→
+   896→function MediaSpendForm({
+   897→  open,
+   898→  onOpenChange,
+   899→  editing,
+   900→  liveStores,
+   901→  presetCode,
+   902→  presetMonth,
+   903→  onSubmit,
+   904→}: {
+   905→  open: boolean
+   906→  onOpenChange: (v: boolean) => void
+   907→  editing: MediaSpend | null
+   908→  liveStores: LiveSpotlightStore[]
+   909→  presetCode: string | null
+   910→  presetMonth: string | null
+   911→  onSubmit: (values: Record<string, string | null>) => Promise<void>
+   912→}) {
+   913→  const [recordCode, setRecordCode] = useState('')
+   914→  const [month, setMonth] = useState(currentMonth())
+   915→  const [metaAllocated, setMetaAllocated] = useState('')
+   916→  const [metaUtilized, setMetaUtilized] = useState('')
+   917→  const [googleAllocated, setGoogleAllocated] = useState('')
+   918→  const [googleUtilized, setGoogleUtilized] = useState('')
+   919→  const [notes, setNotes] = useState('')
+   920→  const [submitting, setSubmitting] = useState(false)
+   921→  const [error, setError] = useState<string | null>(null)
+   922→  const [storePickerOpen, setStorePickerOpen] = useState(false)
+   923→  const [manualEntry, setManualEntry] = useState(false)
+   924→
+   925→  useEffect(() => {
+   926→    if (open) {
+   927→      setRecordCode(editing?.recordCode ?? presetCode ?? '')
+   928→      setMonth(editing?.month ?? presetMonth ?? currentMonth())
+   929→      setMetaAllocated(editing ? String(editing.metaAllocated) : '')
+   930→      setMetaUtilized(editing ? String(editing.metaUtilized) : '')
+   931→      setGoogleAllocated(editing ? String(editing.googleAllocated) : '')
+   932→      setGoogleUtilized(editing ? String(editing.googleUtilized) : '')
+   933→      setNotes(editing?.notes ?? '')
+   934→      setError(null)
+   935→      setStorePickerOpen(false)
+   936→      // Fall back to manual entry when the code is not among live stores
+   937→      setManualEntry(
+   938→        !editing && !presetCode
+   939→          ? false
+   940→          : !liveStores.some((s) => s.code === (editing?.recordCode ?? presetCode))
+   941→      )
+   942→    }
+   943→  }, [open, editing, presetCode, presetMonth, liveStores])
+   944→
+   945→  // Store options: all live Spotlight stores. When editing a record whose
+   946→  // code is no longer live, include it so the current value stays visible.
+   947→  const storeOptions: LiveSpotlightStore[] = (() => {
+   948→    const base = [...liveStores]
+   949→    if (recordCode && !base.some((s) => s.code === recordCode)) {
+   950→      base.unshift({ code: recordCode, name: null, city: null, state: null, hasBudget: true })
+   951→    }
+   952→    return base.sort((a, b) => a.code.localeCompare(b.code))
+   953→  })()
+   954→  const selectedStore = storeOptions.find((s) => s.code === recordCode)
+   955→
+   956→  // Live preview of pending = allocated - utilized (excludes prev. month balance
+   957→  // which is added by the backend automatically)
+   958→  const metaPreview = (parseFloat(metaAllocated) || 0) - (parseFloat(metaUtilized) || 0)
+   959→  const googlePreview = (parseFloat(googleAllocated) || 0) - (parseFloat(googleUtilized) || 0)
+   960→
+   961→  async function handleSubmit(e: React.FormEvent) {
+   962→    e.preventDefault()
+   963→    if (!recordCode.trim() || !month.trim()) {
+   964→      setError('Store Code and Month are required')
+   965→      return
+   966→    }
+   967→    setSubmitting(true)
+   968→    setError(null)
+   969→    try {
+   970→      await onSubmit({
+   971→        recordType: 'Spotlight',
+   972→        recordCode,
+   973→        month,
+   974→        metaAllocated: metaAllocated || null,
+   975→        metaUtilized: metaUtilized || null,
+   976→        googleAllocated: googleAllocated || null,
+   977→        googleUtilized: googleUtilized || null,
+   978→        notes: notes || null,
+   979→      })
+   980→      onOpenChange(false)
+   981→    } catch (err) {
+   982→      setError(err instanceof Error ? err.message : 'Submission failed')
+   983→    } finally {
+   984→      setSubmitting(false)
+   985→    }
+   986→  }
+   987→
+   988→  return (
+   989→    <Dialog open={open} onOpenChange={onOpenChange}>
+   990→      <DialogContent className="sm:max-w-xl">
+   991→        <DialogHeader>
+   992→          <DialogTitle>
+   993→            {editing ? 'Edit Media Spend Entry' : 'Add Media Spend Entry'}
+   994→          </DialogTitle>
+   995→          <DialogDescription>
+   996→            Track Meta and Google ad spend for a location in a specific month.
+   997→            Wallet balances are auto-calculated from the previous month&apos;s
+   998→            record.
+   999→          </DialogDescription>
+  1000→        </DialogHeader>
+  1001→        <form onSubmit={handleSubmit} className="space-y-4">
+  1002→          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+  1003→            <div className="space-y-1.5 sm:col-span-2">
+  1004→              <div className="flex items-center justify-between">
+  1005→                <Label className="text-xs font-medium">
+  1006→                  Spotlight Store <span className="text-muted-foreground">(live/active)</span> *
+  1007→                </Label>
+  1008→                <button
+  1009→                  type="button"
+  1010→                  className="inline-flex items-center gap-1 text-[11px] text-muted-foreground hover:text-foreground underline-offset-2 hover:underline"
+  1011→                  onClick={() => setManualEntry((m) => !m)}
+  1012→                >
+  1013→                  <Keyboard className="h-3 w-3" />
+  1014→                  {manualEntry ? 'Pick from list' : 'Enter code manually'}
+  1015→                </button>
+  1016→              </div>
+  1017→              {manualEntry ? (
+  1018→                <Input
+  1019→                  value={recordCode}
+  1020→                  onChange={(e) => setRecordCode(e.target.value)}
+  1021→                  placeholder="Spotlight Client Code, e.g. PU09A"
+  1022→                  className="font-mono"
+  1023→                />
+  1024→              ) : (
+  1025→                <Popover open={storePickerOpen} onOpenChange={setStorePickerOpen}>
+  1026→                  <PopoverTrigger asChild>
+  1027→                    <Button
+  1028→                      type="button"
+  1029→                      variant="outline"
+  1030→                      role="combobox"
+  1031→                      aria-expanded={storePickerOpen}
+  1032→                      className="w-full justify-between font-normal"
+  1033→                    >
+  1034→                      <span className="flex items-center gap-2 min-w-0">
+  1035→                        {selectedStore ? (
+  1036→                          <>
+  1037→                            <span className="font-mono text-xs font-semibold">{selectedStore.code}</span>
+  1038→                            <span className="text-muted-foreground truncate text-xs">
+  1039→                              {selectedStore.name ?? selectedStore.city ?? ''}
+  1040→                            </span>
+  1041→                          </>
+  1042→                        ) : (
+  1043→                          <span className="text-muted-foreground">
+  1044→                            Select a live Spotlight store ({liveStores.length} active)...
+  1045→                          </span>
+  1046→                        )}
+  1047→                      </span>
+  1048→                      <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+  1049→                    </Button>
+  1050→                  </PopoverTrigger>
+  1051→                  <PopoverContent className="w-[--radix-popover-trigger-width] p-0" align="start">
+  1052→                    <Command>
+  1053→                      <CommandInput placeholder="Search store code, name, city..." />
+  1054→                      <CommandList>
+  1055→                        <CommandEmpty>No live Spotlight store found.</CommandEmpty>
+  1056→                        <CommandGroup>
+  1057→                          {storeOptions.map((s) => (
+  1058→                            <CommandItem
+  1059→                              key={s.code}
+  1060→                              value={`${s.code} ${s.name ?? ''} ${s.city ?? ''} ${s.state ?? ''}`}
+  1061→                              onSelect={() => {
+  1062→                                setRecordCode(s.code)
+  1063→                                setStorePickerOpen(false)
+  1064→                              }}
+  1065→                            >
+  1066→                              <Check
+  1067→                                className={cn(
+  1068→                                  'mr-2 h-4 w-4 shrink-0',
+  1069→                                  recordCode === s.code ? 'opacity-100' : 'opacity-0'
+  1070→                                )}
+  1071→                              />
+  1072→                              <div className="flex min-w-0 flex-col">
+  1073→                                <span className="font-mono text-xs font-semibold">{s.code}</span>
+  1074→                                <span className="truncate text-[11px] text-muted-foreground">
+  1075→                                  {[s.name, s.city, s.state].filter(Boolean).join(' · ') || '—'}
+  1076→                                </span>
+  1077→                              </div>
+  1078→                              <span
+  1079→                                className={cn(
+  1080→                                  'ml-auto shrink-0 rounded-full px-1.5 py-0.5 text-[9px] font-medium',
+  1081→                                  s.hasBudget
+  1082→                                    ? 'bg-emerald-500/10 text-emerald-700'
+  1083→                                    : 'bg-amber-500/10 text-amber-700'
+  1084→                                )}
+  1085→                              >
+  1086→                                {s.hasBudget ? 'budgeted' : 'no budget'}
+  1087→                              </span>
+  1088→                            </CommandItem>
+  1089→                          ))}
+  1090→                        </CommandGroup>
+  1091→                      </CommandList>
+  1092→                    </Command>
+  1093→                  </PopoverContent>
+  1094→                </Popover>
+  1095→              )}
+  1096→              <p className="text-[10px] text-muted-foreground">
+  1097→                Only stores that are active (live) in Spotlight are listed. Media
+  1098→                spend is tracked per Spotlight location.
+  1099→              </p>
+  1100→            </div>
+  1101→            <div className="space-y-1.5">
+  1102→              <Label className="text-xs font-medium">Month *</Label>
+  1103→              <Select value={month} onValueChange={setMonth}>
+  1104→                <SelectTrigger>
+  1105→                  <SelectValue />
+  1106→                </SelectTrigger>
+  1107→                <SelectContent>
+  1108→                  {recentMonths(12).map((m) => (
+  1109→                    <SelectItem key={m} value={m}>
+  1110→                      {formatMonth(m)}
+  1111→                    </SelectItem>
+  1112→                  ))}
+  1113→                </SelectContent>
+  1114→              </Select>
+  1115→            </div>
+  1116→          </div>
+  1117→
+  1118→          {/* Meta section */}
+  1119→          <div className="rounded-lg border border-blue-200 bg-blue-500/5 p-3 space-y-3">
+  1120→            <div className="flex items-center gap-2 text-blue-700">
+  1121→              <Facebook className="h-4 w-4" />
+  1122→              <span className="text-sm font-semibold">Meta (Facebook Ads)</span>
+  1123→            </div>
+  1124→            <div className="grid grid-cols-2 gap-3">
+  1125→              <div className="space-y-1.5">
+  1126→                <Label htmlFor="metaAllocated" className="text-xs font-medium">
+  1127→                  Meta Allocated (INR)
+  1128→                </Label>
+  1129→                <Input
+  1130→                  id="metaAllocated"
+  1131→                  type="number"
+  1132→                  step="any"
+  1133→                  min="0"
+  1134→                  value={metaAllocated}
+  1135→                  onChange={(e) => setMetaAllocated(e.target.value)}
+  1136→                  placeholder="0"
+  1137→                />
+  1138→              </div>
+  1139→              <div className="space-y-1.5">
+  1140→                <Label htmlFor="metaUtilized" className="text-xs font-medium">
+  1141→                  Meta Utilized (INR)
+  1142→                </Label>
+  1143→                <Input
+  1144→                  id="metaUtilized"
+  1145→                  type="number"
+  1146→                  step="any"
+  1147→                  min="0"
+  1148→                  value={metaUtilized}
+  1149→                  onChange={(e) => setMetaUtilized(e.target.value)}
+  1150→                  placeholder="0"
+  1151→                />
+  1152→              </div>
+  1153→            </div>
+  1154→            <div className="flex items-center justify-between rounded-md bg-blue-500/10 px-2.5 py-1.5">
+  1155→              <span className="text-[11px] font-medium text-blue-700">
+  1156→                Meta Pending Wallet (auto)
+  1157→              </span>
+  1158→              <span className="text-xs text-blue-700">
+  1159→                <span className="font-semibold">{formatCurrency(metaPreview)}</span>
+  1160→                <span className="ml-2 text-[10px] text-muted-foreground">
+  1161→                  = alloc + prev − util
+  1162→                </span>
+  1163→              </span>
+  1164→            </div>
+  1165→          </div>
+  1166→
+  1167→          {/* Google section */}
+  1168→          <div className="rounded-lg border border-red-200 bg-red-500/5 p-3 space-y-3">
+  1169→            <div className="flex items-center gap-2 text-red-700">
+  1170→              <Chrome className="h-4 w-4" />
+  1171→              <span className="text-sm font-semibold">Google Ads</span>
+  1172→            </div>
+  1173→            <div className="grid grid-cols-2 gap-3">
+  1174→              <div className="space-y-1.5">
+  1175→                <Label htmlFor="googleAllocated" className="text-xs font-medium">
+  1176→                  Google Allocated (INR)
+  1177→                </Label>
+  1178→                <Input
+  1179→                  id="googleAllocated"
+  1180→                  type="number"
+  1181→                  step="any"
+  1182→                  min="0"
+  1183→                  value={googleAllocated}
+  1184→                  onChange={(e) => setGoogleAllocated(e.target.value)}
+  1185→                  placeholder="0"
+  1186→                />
+  1187→              </div>
+  1188→              <div className="space-y-1.5">
+  1189→                <Label htmlFor="googleUtilized" className="text-xs font-medium">
+  1190→                  Google Utilized (INR)
+  1191→                </Label>
+  1192→                <Input
+  1193→                  id="googleUtilized"
+  1194→                  type="number"
+  1195→                  step="any"
+  1196→                  min="0"
+  1197→                  value={googleUtilized}
+  1198→                  onChange={(e) => setGoogleUtilized(e.target.value)}
+  1199→                  placeholder="0"
+  1200→                />
+  1201→              </div>
+  1202→            </div>
+  1203→            <div className="flex items-center justify-between rounded-md bg-red-500/10 px-2.5 py-1.5">
+  1204→              <span className="text-[11px] font-medium text-red-700">
+  1205→                Google Pending Wallet (auto)
+  1206→              </span>
+  1207→              <span className="text-xs text-red-700">
+  1208→                <span className="font-semibold">{formatCurrency(googlePreview)}</span>
+  1209→                <span className="ml-2 text-[10px] text-muted-foreground">
+  1210→                  = alloc + prev − util
+  1211→                </span>
+  1212→              </span>
+  1213→            </div>
+  1214→          </div>
+  1215→
+  1216→          <div className="space-y-1.5">
+  1217→            <Label htmlFor="notes" className="text-xs font-medium">Notes</Label>
+  1218→            <Textarea
+  1219→              id="notes"
+  1220→              value={notes}
+  1221→              onChange={(e) => setNotes(e.target.value)}
+  1222→              rows={2}
+  1223→              placeholder="Optional notes..."
+  1224→            />
+  1225→          </div>
+  1226→          {error && (
+  1227→            <div className="rounded-md border border-destructive/50 bg-destructive/5 p-3 text-sm text-destructive">
+  1228→              {error}
+  1229→            </div>
+  1230→          )}
+  1231→          <DialogFooter>
+  1232→            <Button type="button" variant="outline" onClick={() => onOpenChange(false)} disabled={submitting}>
+  1233→              Cancel
+  1234→            </Button>
+  1235→            <Button type="submit" disabled={submitting}>
+  1236→              {submitting && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+  1237→              {editing ? 'Update Entry' : 'Create Entry'}
+  1238→            </Button>
+  1239→          </DialogFooter>
+  1240→        </form>
+  1241→      </DialogContent>
+  1242→    </Dialog>
+  1243→  )
+  1244→}
+  1245→
+  1246→function downloadCSV(rows: MediaSpend[], filename: string) {
+  1247→  const headers = [
+  1248→    'Location Type',
+  1249→    'Location Code',
+  1250→    'Month',
+  1251→    'Meta Allocated',
+  1252→    'Meta Utilized',
+  1253→    'Meta Pending in Wallet',
+  1254→    'Google Allocated',
+  1255→    'Google Utilized',
+  1256→    'Google Pending in Wallet',
+  1257→    'Total Allocated',
+  1258→    'Total Utilized',
+  1259→    'Total Pending in Wallet',
+  1260→    'Notes',
+  1261→  ]
+  1262→  const escape = (v: unknown) => {
+  1263→    if (v === null || v === undefined) return ''
+  1264→    const s = String(v)
+  1265→    if (/[",\n]/.test(s)) return `"${s.replace(/"/g, '""')}"`
+  1266→    return s
+  1267→  }
+  1268→  const csv = [
+  1269→    headers.join(','),
+  1270→    ...rows.map((r) =>
+  1271→      [
+  1272→        r.recordType,
+  1273→        r.recordCode,
+  1274→        r.month,
+  1275→        r.metaAllocated,
+  1276→        r.metaUtilized,
+  1277→        r.metaPendingInWallet,
+  1278→        r.googleAllocated,
+  1279→        r.googleUtilized,
+  1280→        r.googlePendingInWallet,
+  1281→        r.allocated,
+  1282→        r.utilized,
+  1283→        r.pendingInWallet,
+  1284→        r.notes,
+  1285→      ]
+  1286→        .map(escape)
+  1287→        .join(',')
+  1288→    ),
+  1289→  ].join('\n')
+  1290→  const blob = new Blob([csv], { type: 'text/csv;charset=utf-8' })
+  1291→  const url = URL.createObjectURL(blob)
+  1292→  const a = document.createElement('a')
+  1293→  a.href = url
+  1294→  a.download = filename
+  1295→  a.click()
+  1296→  URL.revokeObjectURL(url)
+  1297→}
+  1298→
+  1299→function downloadMediaSpendTemplate() {
+  1300→  const headers = [
+  1301→    'Location Code',
+  1302→    'Month',
+  1303→    'Meta Allocated',
+  1304→    'Meta Utilized',
+  1305→    'Google Allocated',
+  1306→    'Google Utilized',
+  1307→    'Notes',
+  1308→  ]
+  1309→  const sample = [
+  1310→    'PU09A,2025-01,25000,18000,15000,12000,Jan campaigns',
+  1311→    'PU10B,2025-01,30000,22000,10000,8000,',
+  1312→  ]
+  1313→  const csv = [headers.join(','), ...sample].join('\n')
+  1314→  const blob = new Blob([csv], { type: 'text/csv;charset=utf-8' })
+  1315→  const url = URL.createObjectURL(blob)
+  1316→  const a = document.createElement('a')
+  1317→  a.href = url
+  1318→  a.download = 'media-spend-template.csv'
+  1319→  a.click()
+  1320→  URL.revokeObjectURL(url)
+  1321→}
+  1322→

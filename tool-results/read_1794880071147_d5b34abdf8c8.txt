@@ -1,0 +1,878 @@
+     1→'use client'
+     2→
+     3→import { useState, useEffect, useCallback, useMemo, useRef } from 'react'
+     4→import { Button } from '@/components/ui/button'
+     5→import { Badge } from '@/components/ui/badge'
+     6→import { Input } from '@/components/ui/input'
+     7→import { Label } from '@/components/ui/label'
+     8→import { Card, CardContent } from '@/components/ui/card'
+     9→import {
+    10→  Select,
+    11→  SelectContent,
+    12→  SelectItem,
+    13→  SelectTrigger,
+    14→  SelectValue,
+    15→} from '@/components/ui/select'
+    16→import {
+    17→  Table,
+    18→  TableBody,
+    19→  TableCell,
+    20→  TableHead,
+    21→  TableHeader,
+    22→  TableRow,
+    23→} from '@/components/ui/table'
+    24→import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
+    25→import { Skeleton } from '@/components/ui/skeleton'
+    26→import {
+    27→  Link2,
+    28→  Unlink,
+    29→  MapPin,
+    30→  Building2,
+    31→  RefreshCw,
+    32→  ArrowRight,
+    33→  CheckCircle2,
+    34→  AlertCircle,
+    35→  Loader2,
+    36→  Zap,
+    37→  Search,
+    38→  ExternalLink,
+    39→  TrendingUp,
+    40→} from 'lucide-react'
+    41→import { useToast } from '@/hooks/use-toast'
+    42→
+    43→// ---- Types ----
+    44→
+    45→interface MappingRow {
+    46→  siId: string
+    47→  siCode: string
+    48→  siClientCode: string
+    49→  siName: string | null
+    50→  siCity: string | null
+    51→  siState: string | null
+    52→  siCircle: string | null
+    53→  siIsLive: boolean
+    54→  spotlightId: string | null
+    55→  spotlightCode: string | null
+    56→  spotlightName: string | null
+    57→  spotlightCity: string | null
+    58→  spotlightState: string | null
+    59→  spotlightRegion: string | null
+    60→  spotlightIsLive: boolean | null
+    61→  spotlightDomain: string | null
+    62→  matchType: 'manual' | 'auto' | 'none'
+    63→  matchScore: number
+    64→}
+    65→
+    66→interface UnmatchedSpotlightRow {
+    67→  id: string
+    68→  clientCode: string
+    69→  name: string | null
+    70→  city: string | null
+    71→  state: string | null
+    72→  region: string | null
+    73→  isLive: boolean
+    74→  domain: string | null
+    75→}
+    76→
+    77→interface MappingSummary {
+    78→  totalSI: number
+    79→  totalSpotlight: number
+    80→  matched: number
+    81→  manuallyLinked: number
+    82→  autoMatched: number
+    83→  unmatchedSI: number
+    84→  unmatchedSpotlight: number
+    85→  matchRate: number
+    86→}
+    87→
+    88→interface LocationMappingData {
+    89→  mappings: MappingRow[]
+    90→  unmatchedSpotlight: UnmatchedSpotlightRow[]
+    91→  summary: MappingSummary
+    92→}
+    93→
+    94→type TabId = 'mapped' | 'unmatched-si' | 'unmatched-spotlight'
+    95→
+    96→const MIN_SCORE_OPTIONS = [50, 60, 70, 80, 90]
+    97→const PAGE_SIZE = 50
+    98→
+    99→// ---- API helpers ----
+   100→
+   101→async function fetchJson<T>(url: string, init?: RequestInit): Promise<T> {
+   102→  const res = await fetch(url, init)
+   103→  if (!res.ok) {
+   104→    const body = await res.json().catch(() => null)
+   105→    throw new Error(body?.error || `Request failed (${res.status})`)
+   106→  }
+   107→  return res.json() as Promise<T>
+   108→}
+   109→
+   110→function linkRecords(siId: string, spotlightCode: string | null) {
+   111→  return fetchJson<{ success: boolean }>('/api/location-mapping/link', {
+   112→    method: 'POST',
+   113→    headers: { 'Content-Type': 'application/json' },
+   114→    body: JSON.stringify({ siId, spotlightCode }),
+   115→  })
+   116→}
+   117→
+   118→// ---- Small presentational helpers ----
+   119→
+   120→function LiveBadge({ live }: { live: boolean | null }) {
+   121→  if (live === null || live === undefined) return null
+   122→  return live ? (
+   123→    <Badge className="h-5 px-1.5 text-[10px] bg-emerald-600 text-white hover:bg-emerald-600">
+   124→      Live
+   125→    </Badge>
+   126→  ) : (
+   127→    <Badge variant="outline" className="h-5 px-1.5 text-[10px] text-muted-foreground">
+   128→      Not Live
+   129→    </Badge>
+   130→  )
+   131→}
+   132→
+   133→function MatchTypeBadge({ type, score }: { type: MappingRow['matchType']; score: number }) {
+   134→  if (type === 'manual') {
+   135→    return (
+   136→      <Badge className="bg-primary text-primary-foreground text-xs">
+   137→        <Link2 className="h-3 w-3" />
+   138→        <span className="ml-1">Manual</span>
+   139→      </Badge>
+   140→    )
+   141→  }
+   142→  if (type === 'auto') {
+   143→    return (
+   144→      <Badge className="bg-amber-500 text-white hover:bg-amber-500 text-xs">
+   145→        <Zap className="h-3 w-3" />
+   146→        <span className="ml-1">Auto · {score}%</span>
+   147→      </Badge>
+   148→    )
+   149→  }
+   150→  return (
+   151→    <Badge variant="secondary" className="text-xs text-muted-foreground">
+   152→      Unmatched
+   153→    </Badge>
+   154→  )
+   155→}
+   156→
+   157→function RecordCell({
+   158→  code,
+   159→  name,
+   160→  city,
+   161→  state,
+   162→  extra,
+   163→  live,
+   164→  domain,
+   165→}: {
+   166→  code: string | null
+   167→  name: string | null
+   168→  city: string | null
+   169→  state: string | null
+   170→  extra?: string | null
+   171→  live: boolean | null
+   172→  domain?: string | null
+   173→}) {
+   174→  const location = [city, state, extra].filter(Boolean).join(', ')
+   175→  return (
+   176→    <div className="flex flex-col gap-1 min-w-[170px] py-0.5">
+   177→      <div className="flex items-center gap-1.5 flex-wrap">
+   178→        {code ? (
+   179→          <code className="text-xs bg-muted px-1.5 py-0.5 rounded font-medium">{code}</code>
+   180→        ) : (
+   181→          <span className="text-xs text-muted-foreground">—</span>
+   182→        )}
+   183→        <LiveBadge live={live} />
+   184→      </div>
+   185→      {name && (
+   186→        <span className="text-sm font-medium leading-snug line-clamp-1 max-w-[250px]" title={name}>
+   187→          {name}
+   188→        </span>
+   189→      )}
+   190→      {location && (
+   191→        <span className="text-xs text-muted-foreground flex items-center gap-1">
+   192→          <MapPin className="h-3 w-3 shrink-0" />
+   193→          <span className="truncate max-w-[220px]">{location}</span>
+   194→        </span>
+   195→      )}
+   196→      {domain && (
+   197→        <a
+   198→          href={domain}
+   199→          target="_blank"
+   200→          rel="noreferrer"
+   201→          className="text-xs text-primary hover:underline inline-flex items-center gap-1 truncate max-w-[220px]"
+   202→          title={domain}
+   203→        >
+   204→          <ExternalLink className="h-3 w-3 shrink-0" />
+   205→          {domain.replace(/^https?:\/\//, '')}
+   206→        </a>
+   207→      )}
+   208→    </div>
+   209→  )
+   210→}
+   211→
+   212→function SummaryCard({
+   213→  label,
+   214→  value,
+   215→  icon,
+   216→  valueClass,
+   217→}: {
+   218→  label: string
+   219→  value: string | number
+   220→  icon: React.ReactNode
+   221→  valueClass?: string
+   222→}) {
+   223→  return (
+   224→    <Card>
+   225→      <CardContent className="pt-4 pb-4">
+   226→        <div className="flex items-center gap-1.5 text-muted-foreground">
+   227→          {icon}
+   228→          <p className="text-xs uppercase tracking-wide">{label}</p>
+   229→        </div>
+   230→        <p className={`text-2xl font-bold mt-1.5 ${valueClass ?? ''}`}>{value}</p>
+   231→      </CardContent>
+   232→    </Card>
+   233→  )
+   234→}
+   235→
+   236→function LoadMoreButton({
+   237→  remaining,
+   238→  onClick,
+   239→}: {
+   240→  remaining: number
+   241→  onClick: () => void
+   242→}) {
+   243→  return (
+   244→    <div className="flex items-center justify-center gap-3 border-t p-3">
+   245→      <Button variant="outline" size="sm" onClick={onClick}>
+   246→        Load More
+   247→      </Button>
+   248→      <span className="text-xs text-muted-foreground">{remaining} more rows</span>
+   249→    </div>
+   250→  )
+   251→}
+   252→
+   253→// ---- Main component ----
+   254→
+   255→export function LocationMappingPage() {
+   256→  const { toast } = useToast()
+   257→  const [data, setData] = useState<LocationMappingData | null>(null)
+   258→  const [error, setError] = useState<string | null>(null)
+   259→  const [refreshing, setRefreshing] = useState(false)
+   260→  const [minScore, setMinScore] = useState(50)
+   261→  const [tab, setTab] = useState<TabId>('mapped')
+   262→  const [query, setQuery] = useState('')
+   263→  const [visibleCount, setVisibleCount] = useState(PAGE_SIZE)
+   264→  const [busySiId, setBusySiId] = useState<string | null>(null)
+   265→  const [autoLinkProgress, setAutoLinkProgress] = useState<{ done: number; total: number } | null>(
+   266→    null
+   267→  )
+   268→  const hasDataRef = useRef(false)
+   269→
+   270→  const fetchData = useCallback(
+   271→    async (score: number) => {
+   272→      setRefreshing(true)
+   273→      setError(null)
+   274→      try {
+   275→        const json = await fetchJson<LocationMappingData>(
+   276→          `/api/location-mapping?minScore=${score}`
+   277→        )
+   278→        setData(json)
+   279→        hasDataRef.current = true
+   280→      } catch (e) {
+   281→        const msg = e instanceof Error ? e.message : 'Failed to load location mapping'
+   282→        setError(msg)
+   283→        if (hasDataRef.current) {
+   284→          toast({
+   285→            title: 'Refresh failed',
+   286→            description: msg,
+   287→            variant: 'destructive',
+   288→          })
+   289→        }
+   290→      } finally {
+   291→        setRefreshing(false)
+   292→      }
+   293→    },
+   294→    [toast]
+   295→  )
+   296→
+   297→  useEffect(() => {
+   298→    fetchData(minScore)
+   299→  }, [fetchData, minScore])
+   300→
+   301→  // Reset pagination when the view changes
+   302→  useEffect(() => {
+   303→    setVisibleCount(PAGE_SIZE)
+   304→  }, [tab, query])
+   305→
+   306→  // ---- Derived data ----
+   307→
+   308→  const mappedRows = useMemo(() => {
+   309→    if (!data) return []
+   310→    return data.mappings
+   311→      .filter((m) => m.matchType !== 'none' && m.spotlightCode)
+   312→      .sort((a, b) => {
+   313→        if (a.matchType !== b.matchType) return a.matchType === 'manual' ? -1 : 1
+   314→        return b.matchScore - a.matchScore
+   315→      })
+   316→  }, [data])
+   317→
+   318→  const unmatchedSiRows = useMemo(
+   319→    () => (data ? data.mappings.filter((m) => m.matchType === 'none') : []),
+   320→    [data]
+   321→  )
+   322→
+   323→  const unmatchedSpotRows = data?.unmatchedSpotlight ?? []
+   324→
+   325→  const q = query.trim().toLowerCase()
+   326→
+   327→  const filteredMapped = useMemo(() => {
+   328→    if (!q) return mappedRows
+   329→    return mappedRows.filter((r) =>
+   330→      [
+   331→        r.siCode,
+   332→        r.siClientCode,
+   333→        r.siName,
+   334→        r.siCity,
+   335→        r.siState,
+   336→        r.spotlightCode,
+   337→        r.spotlightName,
+   338→        r.spotlightCity,
+   339→        r.spotlightState,
+   340→      ].some((t) => !!t && t.toLowerCase().includes(q))
+   341→    )
+   342→  }, [mappedRows, q])
+   343→
+   344→  const filteredUnmatchedSi = useMemo(() => {
+   345→    if (!q) return unmatchedSiRows
+   346→    return unmatchedSiRows.filter((r) =>
+   347→      [r.siCode, r.siClientCode, r.siName, r.siCity, r.siState, r.siCircle].some(
+   348→        (t) => !!t && t.toLowerCase().includes(q)
+   349→      )
+   350→    )
+   351→  }, [unmatchedSiRows, q])
+   352→
+   353→  const filteredUnmatchedSpot = useMemo(() => {
+   354→    if (!q) return unmatchedSpotRows
+   355→    return unmatchedSpotRows.filter((r) =>
+   356→      [r.clientCode, r.name, r.city, r.state, r.region, r.domain].some(
+   357→        (t) => !!t && t.toLowerCase().includes(q)
+   358→      )
+   359→    )
+   360→  }, [unmatchedSpotRows, q])
+   361→
+   362→  // ---- Actions ----
+   363→
+   364→  async function handleLink(row: MappingRow, spotlightCode: string | null) {
+   365→    setBusySiId(row.siId)
+   366→    try {
+   367→      await linkRecords(row.siId, spotlightCode)
+   368→      toast({
+   369→        title: spotlightCode ? 'Records linked' : 'Link removed',
+   370→        description: spotlightCode
+   371→          ? `SI ${row.siCode} is now linked to Spotlight ${spotlightCode}`
+   372→          : `SI ${row.siCode} was unlinked from Spotlight`,
+   373→      })
+   374→      await fetchData(minScore)
+   375→    } catch (e) {
+   376→      toast({
+   377→        title: spotlightCode ? 'Link failed' : 'Unlink failed',
+   378→        description: e instanceof Error ? e.message : 'Something went wrong',
+   379→        variant: 'destructive',
+   380→      })
+   381→    } finally {
+   382→      setBusySiId(null)
+   383→    }
+   384→  }
+   385→
+   386→  async function handleAutoLinkAll() {
+   387→    if (!data || autoLinkProgress) return
+   388→    const targets = data.mappings.filter((m) => m.matchType === 'auto' && m.spotlightCode)
+   389→    if (targets.length === 0) {
+   390→      toast({
+   391→        title: 'Nothing to auto-link',
+   392→        description: 'No auto-matched pairs above the current score threshold.',
+   393→      })
+   394→      return
+   395→    }
+   396→    setAutoLinkProgress({ done: 0, total: targets.length })
+   397→    let linked = 0
+   398→    let failed = 0
+   399→    for (let i = 0; i < targets.length; i++) {
+   400→      try {
+   401→        await linkRecords(targets[i].siId, targets[i].spotlightCode)
+   402→        linked++
+   403→      } catch {
+   404→        failed++
+   405→      }
+   406→      setAutoLinkProgress({ done: i + 1, total: targets.length })
+   407→    }
+   408→    setAutoLinkProgress(null)
+   409→    toast({
+   410→      title: 'Auto-link complete',
+   411→      description: `${linked} pair${linked === 1 ? '' : 's'} linked${
+   412→        failed > 0 ? `, ${failed} failed` : ''
+   413→      }.`,
+   414→      variant: failed > 0 && linked === 0 ? 'destructive' : undefined,
+   415→    })
+   416→    await fetchData(minScore)
+   417→  }
+   418→
+   419→  // ---- Render ----
+   420→
+   421→  if (!data) {
+   422→    if (error) {
+   423→      return (
+   424→        <Card className="border-destructive/30">
+   425→          <CardContent className="pt-6 flex items-start gap-3">
+   426→            <AlertCircle className="h-5 w-5 text-destructive mt-0.5 shrink-0" />
+   427→            <div>
+   428→              <p className="text-sm font-medium text-destructive">
+   429→                Failed to load location mapping
+   430→              </p>
+   431→              <p className="text-xs text-muted-foreground mt-0.5">{error}</p>
+   432→              <Button variant="outline" size="sm" className="mt-3" onClick={() => fetchData(minScore)}>
+   433→                <RefreshCw className="mr-2 h-4 w-4" />
+   434→                Retry
+   435→              </Button>
+   436→            </div>
+   437→          </CardContent>
+   438→        </Card>
+   439→      )
+   440→    }
+   441→    return (
+   442→      <div className="space-y-5">
+   443→        <div className="space-y-2">
+   444→          <Skeleton className="h-7 w-56" />
+   445→          <Skeleton className="h-4 w-96 max-w-full" />
+   446→        </div>
+   447→        <div className="grid grid-cols-2 sm:grid-cols-3 xl:grid-cols-6 gap-3">
+   448→          {Array.from({ length: 6 }).map((_, i) => (
+   449→            <Card key={i}>
+   450→              <CardContent className="pt-4 pb-4 space-y-2">
+   451→                <Skeleton className="h-3 w-20" />
+   452→                <Skeleton className="h-7 w-14" />
+   453→              </CardContent>
+   454→            </Card>
+   455→          ))}
+   456→        </div>
+   457→        <div className="rounded-lg border bg-card overflow-hidden">
+   458→          <div className="p-3 flex items-center gap-2 border-b">
+   459→            <Skeleton className="h-9 w-64" />
+   460→            <Skeleton className="h-9 w-40" />
+   461→          </div>
+   462→          <div className="p-4 space-y-3">
+   463→            {Array.from({ length: 6 }).map((_, i) => (
+   464→              <div key={i} className="flex items-center gap-4">
+   465→                <Skeleton className="h-12 w-1/3" />
+   466→                <Skeleton className="h-5 w-6" />
+   467→                <Skeleton className="h-12 w-1/3" />
+   468→                <Skeleton className="h-5 w-20" />
+   469→              </div>
+   470→            ))}
+   471→          </div>
+   472→        </div>
+   473→      </div>
+   474→    )
+   475→  }
+   476→
+   477→  const summary = data.summary
+   478→  const actionsDisabled = refreshing || !!autoLinkProgress
+   479→  const autoLinkCount = summary.autoMatched
+   480→
+   481→  return (
+   482→    <div className="space-y-5">
+   483→      {/* Header */}
+   484→      <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
+   485→        <div>
+   486→          <h2 className="text-xl font-semibold tracking-tight flex items-center gap-2">
+   487→            <Link2 className="h-5 w-5 text-primary" />
+   488→            Location Mapping
+   489→          </h2>
+   490→          <p className="text-sm text-muted-foreground mt-0.5">
+   491→            SI ↔ Spotlight record mapping — auto-matched by dealer name, city, and state
+   492→          </p>
+   493→        </div>
+   494→        <div className="flex flex-wrap items-center gap-2">
+   495→          <div className="flex items-center gap-2">
+   496→            <Label htmlFor="min-score" className="text-xs text-muted-foreground whitespace-nowrap">
+   497→              Min Score
+   498→            </Label>
+   499→            <Select
+   500→              value={String(minScore)}
+   501→              onValueChange={(v) => setMinScore(Number(v))}
+   502→              disabled={actionsDisabled}
+   503→            >
+   504→              <SelectTrigger id="min-score" className="w-[88px] h-9">
+   505→                <SelectValue />
+   506→              </SelectTrigger>
+   507→              <SelectContent>
+   508→                {MIN_SCORE_OPTIONS.map((s) => (
+   509→                  <SelectItem key={s} value={String(s)}>
+   510→                    {s}%
+   511→                  </SelectItem>
+   512→                ))}
+   513→              </SelectContent>
+   514→            </Select>
+   515→          </div>
+   516→          <Button
+   517→            size="sm"
+   518→            onClick={handleAutoLinkAll}
+   519→            disabled={actionsDisabled || autoLinkCount === 0}
+   520→            title="Confirm all auto-matched pairs as manual links"
+   521→          >
+   522→            {autoLinkProgress ? (
+   523→              <>
+   524→                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+   525→                Linking {autoLinkProgress.done}/{autoLinkProgress.total}…
+   526→              </>
+   527→            ) : (
+   528→              <>
+   529→                <Zap className="mr-2 h-4 w-4" />
+   530→                Auto-Link All{autoLinkCount > 0 ? ` (${autoLinkCount})` : ''}
+   531→              </>
+   532→            )}
+   533→          </Button>
+   534→          <Button
+   535→            variant="outline"
+   536→            size="sm"
+   537→            onClick={() => fetchData(minScore)}
+   538→            disabled={actionsDisabled}
+   539→          >
+   540→            <RefreshCw className={`mr-2 h-4 w-4 ${refreshing ? 'animate-spin' : ''}`} />
+   541→            Refresh
+   542→          </Button>
+   543→        </div>
+   544→      </div>
+   545→
+   546→      {/* Summary cards */}
+   547→      <div className="grid grid-cols-2 sm:grid-cols-3 xl:grid-cols-6 gap-3">
+   548→        <SummaryCard
+   549→          label="Total SI"
+   550→          value={summary.totalSI}
+   551→          icon={<Building2 className="h-3.5 w-3.5" />}
+   552→        />
+   553→        <SummaryCard
+   554→          label="Total Spotlight"
+   555→          value={summary.totalSpotlight}
+   556→          icon={<MapPin className="h-3.5 w-3.5" />}
+   557→        />
+   558→        <SummaryCard
+   559→          label="Matched"
+   560→          value={summary.matched}
+   561→          valueClass="text-emerald-600"
+   562→          icon={<CheckCircle2 className="h-3.5 w-3.5" />}
+   563→        />
+   564→        <SummaryCard
+   565→          label="Manually Linked"
+   566→          value={summary.manuallyLinked}
+   567→          valueClass="text-primary"
+   568→          icon={<Link2 className="h-3.5 w-3.5" />}
+   569→        />
+   570→        <SummaryCard
+   571→          label="Auto-Matched"
+   572→          value={summary.autoMatched}
+   573→          valueClass="text-amber-600"
+   574→          icon={<Zap className="h-3.5 w-3.5" />}
+   575→        />
+   576→        <SummaryCard
+   577→          label="Match Rate"
+   578→          value={`${summary.matchRate}%`}
+   579→          valueClass="text-emerald-600"
+   580→          icon={<TrendingUp className="h-3.5 w-3.5" />}
+   581→        />
+   582→      </div>
+   583→
+   584→      {/* Tabs: mapped / unmatched SI / unmatched Spotlight */}
+   585→      <Tabs value={tab} onValueChange={(v) => setTab(v as TabId)}>
+   586→        <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+   587→          <TabsList className="flex-wrap h-auto">
+   588→            <TabsTrigger value="mapped" className="gap-1.5">
+   589→              <Link2 className="h-3.5 w-3.5" />
+   590→              All Mapped
+   591→              <Badge variant="secondary" className="h-5 px-1.5 text-[10px] font-semibold">
+   592→                {summary.matched}
+   593→              </Badge>
+   594→            </TabsTrigger>
+   595→            <TabsTrigger value="unmatched-si" className="gap-1.5">
+   596→              <Building2 className="h-3.5 w-3.5" />
+   597→              Unmatched SI
+   598→              <Badge variant="secondary" className="h-5 px-1.5 text-[10px] font-semibold">
+   599→                {summary.unmatchedSI}
+   600→              </Badge>
+   601→            </TabsTrigger>
+   602→            <TabsTrigger value="unmatched-spotlight" className="gap-1.5">
+   603→              <MapPin className="h-3.5 w-3.5" />
+   604→              Unmatched Spotlight
+   605→              <Badge variant="secondary" className="h-5 px-1.5 text-[10px] font-semibold">
+   606→                {summary.unmatchedSpotlight}
+   607→              </Badge>
+   608→            </TabsTrigger>
+   609→          </TabsList>
+   610→          <div className="relative w-full sm:w-[280px]">
+   611→            <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+   612→            <Input
+   613→              value={query}
+   614→              onChange={(e) => setQuery(e.target.value)}
+   615→              placeholder="Search code, name, or city…"
+   616→              className="pl-8 h-9"
+   617→            />
+   618→          </div>
+   619→        </div>
+   620→
+   621→        {/* All Mapped tab */}
+   622→        <TabsContent value="mapped" className="mt-3">
+   623→          <div className={`rounded-lg border bg-card overflow-hidden transition-opacity ${refreshing ? 'opacity-60' : ''}`}>
+   624→            <div className="overflow-x-auto">
+   625→              <Table>
+   626→                <TableHeader>
+   627→                  <TableRow>
+   628→                    <TableHead>SI Record</TableHead>
+   629→                    <TableHead className="w-[44px] text-center" aria-label="Mapped to" />
+   630→                    <TableHead>Spotlight Record</TableHead>
+   631→                    <TableHead>Match</TableHead>
+   632→                    <TableHead className="w-[110px] text-right">Actions</TableHead>
+   633→                  </TableRow>
+   634→                </TableHeader>
+   635→                <TableBody>
+   636→                  {filteredMapped.length > 0 ? (
+   637→                    filteredMapped.slice(0, visibleCount).map((row) => {
+   638→                      const busy = busySiId === row.siId
+   639→                      return (
+   640→                        <TableRow key={row.siId}>
+   641→                          <TableCell>
+   642→                            <RecordCell
+   643→                              code={row.siCode}
+   644→                              name={row.siName}
+   645→                              city={row.siCity}
+   646→                              state={row.siState}
+   647→                              extra={row.siCircle}
+   648→                              live={row.siIsLive}
+   649→                            />
+   650→                          </TableCell>
+   651→                          <TableCell className="text-center">
+   652→                            {busy ? (
+   653→                              <Loader2 className="h-4 w-4 animate-spin mx-auto text-muted-foreground" />
+   654→                            ) : (
+   655→                              <ArrowRight className="h-4 w-4 mx-auto text-muted-foreground" />
+   656→                            )}
+   657→                          </TableCell>
+   658→                          <TableCell>
+   659→                            <RecordCell
+   660→                              code={row.spotlightCode}
+   661→                              name={row.spotlightName}
+   662→                              city={row.spotlightCity}
+   663→                              state={row.spotlightState}
+   664→                              extra={row.spotlightRegion}
+   665→                              live={row.spotlightIsLive}
+   666→                            />
+   667→                          </TableCell>
+   668→                          <TableCell>
+   669→                            <MatchTypeBadge type={row.matchType} score={row.matchScore} />
+   670→                          </TableCell>
+   671→                          <TableCell className="text-right">
+   672→                            {row.matchType === 'manual' ? (
+   673→                              <Button
+   674→                                variant="outline"
+   675→                                size="sm"
+   676→                                className="h-8 text-destructive hover:text-destructive"
+   677→                                disabled={busy || actionsDisabled}
+   678→                                onClick={() => handleLink(row, null)}
+   679→                              >
+   680→                                <Unlink className="mr-1.5 h-3.5 w-3.5" />
+   681→                                Unlink
+   682→                              </Button>
+   683→                            ) : (
+   684→                              <Button
+   685→                                variant="outline"
+   686→                                size="sm"
+   687→                                className="h-8"
+   688→                                disabled={busy || actionsDisabled}
+   689→                                onClick={() => handleLink(row, row.spotlightCode)}
+   690→                                title="Confirm this auto match as a manual link"
+   691→                              >
+   692→                                <Link2 className="mr-1.5 h-3.5 w-3.5" />
+   693→                                Link
+   694→                              </Button>
+   695→                            )}
+   696→                          </TableCell>
+   697→                        </TableRow>
+   698→                      )
+   699→                    })
+   700→                  ) : (
+   701→                    <TableRow>
+   702→                      <TableCell colSpan={5} className="h-28 text-center text-muted-foreground">
+   703→                        {query
+   704→                          ? 'No mapped records match your search.'
+   705→                          : 'No mapped records yet. Link records from the Unmatched SI tab or lower the score threshold.'}
+   706→                      </TableCell>
+   707→                    </TableRow>
+   708→                  )}
+   709→                </TableBody>
+   710→              </Table>
+   711→            </div>
+   712→            {filteredMapped.length > visibleCount && (
+   713→              <LoadMoreButton
+   714→                remaining={filteredMapped.length - visibleCount}
+   715→                onClick={() => setVisibleCount((c) => c + PAGE_SIZE)}
+   716→              />
+   717→            )}
+   718→          </div>
+   719→        </TabsContent>
+   720→
+   721→        {/* Unmatched SI tab */}
+   722→        <TabsContent value="unmatched-si" className="mt-3">
+   723→          <div className={`rounded-lg border bg-card overflow-hidden transition-opacity ${refreshing ? 'opacity-60' : ''}`}>
+   724→            <div className="overflow-x-auto">
+   725→              <Table>
+   726→                <TableHeader>
+   727→                  <TableRow>
+   728→                    <TableHead>SI Record</TableHead>
+   729→                    <TableHead className="w-[300px]">Link to Spotlight</TableHead>
+   730→                  </TableRow>
+   731→                </TableHeader>
+   732→                <TableBody>
+   733→                  {filteredUnmatchedSi.length > 0 ? (
+   734→                    filteredUnmatchedSi.slice(0, visibleCount).map((row) => {
+   735→                      const busy = busySiId === row.siId
+   736→                      return (
+   737→                        <TableRow key={row.siId}>
+   738→                          <TableCell>
+   739→                            <RecordCell
+   740→                              code={row.siCode}
+   741→                              name={row.siName}
+   742→                              city={row.siCity}
+   743→                              state={row.siState}
+   744→                              extra={row.siCircle}
+   745→                              live={row.siIsLive}
+   746→                            />
+   747→                          </TableCell>
+   748→                          <TableCell>
+   749→                            {unmatchedSpotRows.length > 0 ? (
+   750→                              <div className="flex items-center gap-2">
+   751→                                <Select
+   752→                                  key={row.siId}
+   753→                                  disabled={busy || actionsDisabled}
+   754→                                  onValueChange={(v) => handleLink(row, v)}
+   755→                                >
+   756→                                  <SelectTrigger className="w-full">
+   757→                                    <SelectValue placeholder="Select a Spotlight record…" />
+   758→                                  </SelectTrigger>
+   759→                                  <SelectContent className="max-h-72">
+   760→                                    {unmatchedSpotRows.map((s) => (
+   761→                                      <SelectItem key={s.id} value={s.clientCode}>
+   762→                                        {s.clientCode} — {s.name ?? 'Unnamed'}
+   763→                                        {s.city ? ` (${s.city})` : ''}
+   764→                                      </SelectItem>
+   765→                                    ))}
+   766→                                  </SelectContent>
+   767→                                </Select>
+   768→                                {busy && (
+   769→                                  <Loader2 className="h-4 w-4 animate-spin text-muted-foreground shrink-0" />
+   770→                                )}
+   771→                              </div>
+   772→                            ) : (
+   773→                              <span className="text-xs text-muted-foreground">
+   774→                                No Spotlight records available to link
+   775→                              </span>
+   776→                            )}
+   777→                          </TableCell>
+   778→                        </TableRow>
+   779→                      )
+   780→                    })
+   781→                  ) : (
+   782→                    <TableRow>
+   783→                      <TableCell colSpan={2} className="h-28 text-center text-muted-foreground">
+   784→                        {query
+   785→                          ? 'No unmatched SI records match your search.'
+   786→                          : 'Every SI record is mapped to a Spotlight record.'}
+   787→                      </TableCell>
+   788→                    </TableRow>
+   789→                  )}
+   790→                </TableBody>
+   791→              </Table>
+   792→            </div>
+   793→            {filteredUnmatchedSi.length > visibleCount && (
+   794→              <LoadMoreButton
+   795→                remaining={filteredUnmatchedSi.length - visibleCount}
+   796→                onClick={() => setVisibleCount((c) => c + PAGE_SIZE)}
+   797→              />
+   798→            )}
+   799→          </div>
+   800→        </TabsContent>
+   801→
+   802→        {/* Unmatched Spotlight tab */}
+   803→        <TabsContent value="unmatched-spotlight" className="mt-3">
+   804→          <div className={`rounded-lg border bg-card overflow-hidden transition-opacity ${refreshing ? 'opacity-60' : ''}`}>
+   805→            <div className="overflow-x-auto">
+   806→              <Table>
+   807→                <TableHeader>
+   808→                  <TableRow>
+   809→                    <TableHead>Spotlight Record</TableHead>
+   810→                    <TableHead className="w-[110px]">Region</TableHead>
+   811→                    <TableHead className="w-[220px]">Domain</TableHead>
+   812→                  </TableRow>
+   813→                </TableHeader>
+   814→                <TableBody>
+   815→                  {filteredUnmatchedSpot.length > 0 ? (
+   816→                    filteredUnmatchedSpot.slice(0, visibleCount).map((row) => (
+   817→                      <TableRow key={row.id}>
+   818→                        <TableCell>
+   819→                          <RecordCell
+   820→                            code={row.clientCode}
+   821→                            name={row.name}
+   822→                            city={row.city}
+   823→                            state={row.state}
+   824→                            live={row.isLive}
+   825→                          />
+   826→                        </TableCell>
+   827→                        <TableCell>
+   828→                          {row.region ? (
+   829→                            <Badge variant="outline" className="text-xs">
+   830→                              {row.region}
+   831→                            </Badge>
+   832→                          ) : (
+   833→                            <span className="text-xs text-muted-foreground">—</span>
+   834→                          )}
+   835→                        </TableCell>
+   836→                        <TableCell>
+   837→                          {row.domain ? (
+   838→                            <a
+   839→                              href={row.domain}
+   840→                              target="_blank"
+   841→                              rel="noreferrer"
+   842→                              className="text-xs text-primary hover:underline inline-flex items-center gap-1 truncate max-w-[200px]"
+   843→                              title={row.domain}
+   844→                            >
+   845→                              <ExternalLink className="h-3 w-3 shrink-0" />
+   846→                              {row.domain.replace(/^https?:\/\//, '')}
+   847→                            </a>
+   848→                          ) : (
+   849→                            <span className="text-xs text-muted-foreground">—</span>
+   850→                          )}
+   851→                        </TableCell>
+   852→                      </TableRow>
+   853→                    ))
+   854→                  ) : (
+   855→                    <TableRow>
+   856→                      <TableCell colSpan={3} className="h-28 text-center text-muted-foreground">
+   857→                        {query
+   858→                          ? 'No unmatched Spotlight records match your search.'
+   859→                          : 'Every Spotlight record is mapped to an SI record.'}
+   860→                      </TableCell>
+   861→                    </TableRow>
+   862→                  )}
+   863→                </TableBody>
+   864→              </Table>
+   865→            </div>
+   866→            {filteredUnmatchedSpot.length > visibleCount && (
+   867→              <LoadMoreButton
+   868→                remaining={filteredUnmatchedSpot.length - visibleCount}
+   869→                onClick={() => setVisibleCount((c) => c + PAGE_SIZE)}
+   870→              />
+   871→            )}
+   872→          </div>
+   873→        </TabsContent>
+   874→      </Tabs>
+   875→    </div>
+   876→  )
+   877→}
+   878→
