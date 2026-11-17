@@ -123,6 +123,37 @@ export function calculatePendingInWallet(
 }
 
 /**
+ * Calculate media payment billing fields from the utilized amount + GST rate
+ * and the received amount.
+ *
+ * - gstAmount   = utilized * gstRate / 100
+ * - invoiced    = utilized + gstAmount  (the amount billed to the client)
+ * - tdsAmount   = invoiced - received   (the TDS deducted by the client)
+ * - tdsPct      = tdsAmount / invoiced * 100  (TDS percentage)
+ *
+ * Returns all values rounded to 2 decimal places.
+ */
+export function calculateMediaPayment(
+  utilized: number,
+  gstRate: number,
+  receivedAmount: number
+): {
+  gstAmount: number
+  invoicedAmount: number
+  tdsAmount: number
+  tdsPercentage: number
+} {
+  const gstAmount = +(utilized * (gstRate / 100)).toFixed(2)
+  const invoicedAmount = +(utilized + gstAmount).toFixed(2)
+  const tdsAmount = +(invoicedAmount - receivedAmount).toFixed(2)
+  const tdsPercentage =
+    invoicedAmount > 0
+      ? +((tdsAmount / invoicedAmount) * 100).toFixed(2)
+      : 0
+  return { gstAmount, invoicedAmount, tdsAmount, tdsPercentage }
+}
+
+/**
  * Format a month string (YYYY-MM) into a readable label (e.g. "Jan 2025").
  */
 export function formatMonth(month: string): string {

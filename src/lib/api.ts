@@ -504,3 +504,31 @@ export function importRulesFile(
     body: fd,
   })
 }
+
+// --- Locations (for dropdown selectors) ---
+export interface SILocationOption {
+  siCode: string
+  clientCode: string
+  businessName: string | null
+  city: string | null
+  state: string | null
+  circle: string | null
+  isLive: boolean
+  linkedSpotlightCode: string | null
+}
+
+export interface SpotlightLocationOption {
+  clientCode: string
+  name: string | null
+  city: string | null
+  state: string | null
+  region: string | null
+  isLive: boolean
+}
+
+export function getLocations() {
+  return jsonFetch<{
+    si: SILocationOption[]
+    spotlight: SpotlightLocationOption[]
+  }>(`/api/locations`)
+}

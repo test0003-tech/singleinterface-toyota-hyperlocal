@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { db } from '@/lib/db'
 import type { MediaSpendInput, RecordType } from '@/lib/types'
-import { previousMonth, calculatePendingInWallet } from '@/lib/validation'
+import { previousMonth, calculatePendingInWallet, calculateMediaPayment } from '@/lib/validation'
 
 function parseNum(v: unknown, def = 0): number {
   const n = typeof v === 'string' ? parseFloat(v) : typeof v === 'number' ? v : NaN
@@ -17,6 +17,8 @@ function buildInput(body: Partial<MediaSpendInput>): MediaSpendInput {
     metaUtilized: parseNum(body.metaUtilized, 0),
     googleAllocated: parseNum(body.googleAllocated, 0),
     googleUtilized: parseNum(body.googleUtilized, 0),
+    gstRate: parseNum(body.gstRate, 18),
+    receivedAmount: parseNum(body.receivedAmount, 0),
     notes: body.notes ? String(body.notes).trim() : null,
   }
 }
@@ -107,6 +109,12 @@ export async function PUT(
     const utilized = metaUtilized + googleUtilized
     const pendingInWallet = metaPendingInWallet + googlePendingInWallet
 
+    // Media payment / billing: GST + invoiced + received + TDS (auto-calculated)
+    const gstRate = input.gstRate ?? 18
+    const receivedAmount = input.receivedAmount ?? 0
+    const { gstAmount, invoicedAmount, tdsAmount, tdsPercentage } =
+      calculateMediaPayment(utilized, gstRate, receivedAmount)
+
     const updated = await db.mediaSpend.update({
       where: { id },
       data: {
@@ -122,6 +130,12 @@ export async function PUT(
         allocated,
         utilized,
         pendingInWallet,
+        gstRate,
+        gstAmount,
+        invoicedAmount,
+        receivedAmount,
+        tdsAmount,
+        tdsPercentage,
         notes: input.notes ?? null,
       },
     })

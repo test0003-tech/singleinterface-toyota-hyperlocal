@@ -121,6 +121,13 @@ model MediaSpend {
   allocated       Float    @default(0) // total budget = metaAllocated + googleAllocated
   utilized        Float    @default(0) // total spent = metaUtilized + googleUtilized
   pendingInWallet Float    @default(0) // total pending = metaPending + googlePending
+  // Media payment / billing — invoiced to client, received, TDS auto-calculated
+  gstRate         Float    @default(18) // GST rate applied to utilized amount
+  gstAmount       Float    @default(0) // auto: utilized * gstRate / 100
+  invoicedAmount  Float    @default(0) // auto: utilized + gstAmount (amount billed to client)
+  receivedAmount  Float    @default(0) // amount actually received from client
+  tdsAmount       Float    @default(0) // auto: invoicedAmount - receivedAmount
+  tdsPercentage   Float    @default(0) // auto: (tdsAmount / invoicedAmount) * 100
   notes           String?
   createdAt       DateTime @default(now())
   updatedAt       DateTime @updatedAt

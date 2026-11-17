@@ -180,6 +180,13 @@ export interface MediaSpend {
   allocated: number;
   utilized: number;
   pendingInWallet: number;
+  // Media payment / billing — GST, invoiced, received, TDS
+  gstRate: number;
+  gstAmount: number;
+  invoicedAmount: number;
+  receivedAmount: number;
+  tdsAmount: number;
+  tdsPercentage: number;
   notes: string | null;
   createdAt: string;
   updatedAt: string;
@@ -193,6 +200,8 @@ export interface MediaSpendInput {
   metaUtilized?: number;
   googleAllocated?: number;
   googleUtilized?: number;
+  gstRate?: number;
+  receivedAmount?: number;
   notes?: string | null;
 }
 

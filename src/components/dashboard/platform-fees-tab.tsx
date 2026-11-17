@@ -93,6 +93,7 @@ import {
 import { FinanceImportDialog } from './finance-import-dialog'
 import { RecordPaymentModal } from './record-payment-modal'
 import { PaymentHistoryDrawer } from './payment-history-drawer'
+import { LocationPicker } from './location-picker'
 
 type PaymentStatusFilter = '' | 'unpaid' | 'partial' | 'paid'
 
@@ -902,16 +903,17 @@ function PlatformFeeForm({
           </div>
           <div className="space-y-1.5">
             <Label htmlFor="recordCode" className="text-xs font-medium">
-              Location Code *{' '}
+              {recordType} Location *{' '}
               <span className="text-muted-foreground">
-                (SI Code or Spotlight Client Code)
+                (search &amp; select from {recordType} locations)
               </span>
             </Label>
-            <Input
-              id="recordCode"
+            <LocationPicker
               value={recordCode}
-              onChange={(e) => setRecordCode(e.target.value)}
-              placeholder={recordType === 'SI' ? '10001' : 'PU09A'}
+              onChange={setRecordCode}
+              type={recordType}
+              allowManualEntry
+              placeholder={`Select ${recordType} location...`}
             />
           </div>
           <div className="space-y-1.5">

@@ -90,6 +90,7 @@ import {
   ChevronsUpDown,
   Check,
   Keyboard,
+  Receipt,
 } from 'lucide-react'
 import { useToast } from '@/hooks/use-toast'
 import {
@@ -100,10 +101,12 @@ import {
   exportMediaSpend,
   getStats,
   importMediaSpendFile,
+  getLocations,
 } from '@/lib/api'
 import type { MediaSpend, RecordType, LiveSpotlightStore, LiveSpotlightSummary } from '@/lib/types'
-import { currentMonth, formatMonth, recentMonths, formatCurrency } from '@/lib/validation'
+import { currentMonth, formatMonth, recentMonths, formatCurrency, calculateMediaPayment } from '@/lib/validation'
 import { FinanceImportDialog } from './finance-import-dialog'
+import { LocationPicker } from './location-picker'
 
 const PAGE_SIZE_OPTIONS = [10, 25, 50, 100]
 
@@ -911,11 +914,15 @@ function MediaSpendForm({
   onSubmit: (values: Record<string, string | null>) => Promise<void>
 }) {
   const [recordCode, setRecordCode] = useState('')
+  const [siCode, setSiCode] = useState('')
+  const [siLocations, setSiLocations] = useState<{ siCode: string; businessName: string | null; city: string | null; state: string | null; linkedSpotlightCode: string | null }[]>([])
   const [month, setMonth] = useState(currentMonth())
   const [metaAllocated, setMetaAllocated] = useState('')
   const [metaUtilized, setMetaUtilized] = useState('')
   const [googleAllocated, setGoogleAllocated] = useState('')
   const [googleUtilized, setGoogleUtilized] = useState('')
+  const [gstRate, setGstRate] = useState('18')
+  const [receivedAmount, setReceivedAmount] = useState('')
   const [notes, setNotes] = useState('')
   const [submitting, setSubmitting] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -925,11 +932,14 @@ function MediaSpendForm({
   useEffect(() => {
     if (open) {
       setRecordCode(editing?.recordCode ?? presetCode ?? '')
+      setSiCode(editing?.recordCode ?? presetCode ?? '')
       setMonth(editing?.month ?? presetMonth ?? currentMonth())
       setMetaAllocated(editing ? String(editing.metaAllocated) : '')
       setMetaUtilized(editing ? String(editing.metaUtilized) : '')
       setGoogleAllocated(editing ? String(editing.googleAllocated) : '')
       setGoogleUtilized(editing ? String(editing.googleUtilized) : '')
+      setGstRate(editing ? String(editing.gstRate) : '18')
+      setReceivedAmount(editing ? String(editing.receivedAmount) : '')
       setNotes(editing?.notes ?? '')
       setError(null)
       setStorePickerOpen(false)
@@ -941,6 +951,36 @@ function MediaSpendForm({
       )
     }
   }, [open, editing, presetCode, presetMonth, liveStores])
+
+  // Fetch all SI locations for the SI dropdown
+  useEffect(() => {
+    getLocations().then((res) => {
+      setSiLocations(res.si.map((s) => ({
+        siCode: s.siCode,
+        businessName: s.businessName,
+        city: s.city,
+        state: s.state,
+        linkedSpotlightCode: s.linkedSpotlightCode,
+      })))
+    }).catch(() => {
+      // silent — the Spotlight picker still works
+    })
+  }, [])
+
+  // When an SI location is selected, auto-map it to the Spotlight code
+  // via linkedSpotlightCode.
+  const handleSiSelect = (code: string) => {
+    setSiCode(code)
+    const si = siLocations.find((s) => s.siCode === code)
+    if (si?.linkedSpotlightCode) {
+      setRecordCode(si.linkedSpotlightCode)
+      setManualEntry(false)
+    } else {
+      // No linked Spotlight code — fall back to manual entry of the code
+      setRecordCode(code)
+      setManualEntry(true)
+    }
+  }
 
   // Store options: all live Spotlight stores. When editing a record whose
   // code is no longer live, include it so the current value stays visible.
@@ -957,6 +997,12 @@ function MediaSpendForm({
   // which is added by the backend automatically)
   const metaPreview = (parseFloat(metaAllocated) || 0) - (parseFloat(metaUtilized) || 0)
   const googlePreview = (parseFloat(googleAllocated) || 0) - (parseFloat(googleUtilized) || 0)
+
+  // Media payment preview: GST + invoiced + TDS (auto-calculated)
+  const totalUtilized = (parseFloat(metaUtilized) || 0) + (parseFloat(googleUtilized) || 0)
+  const gstRateNum = parseFloat(gstRate) || 0
+  const receivedNum = parseFloat(receivedAmount) || 0
+  const paymentPreview = calculateMediaPayment(totalUtilized, gstRateNum, receivedNum)
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault()
@@ -975,6 +1021,8 @@ function MediaSpendForm({
         metaUtilized: metaUtilized || null,
         googleAllocated: googleAllocated || null,
         googleUtilized: googleUtilized || null,
+        gstRate: gstRate || null,
+        receivedAmount: receivedAmount || null,
         notes: notes || null,
       })
       onOpenChange(false)
@@ -999,6 +1047,25 @@ function MediaSpendForm({
           </DialogDescription>
         </DialogHeader>
         <form onSubmit={handleSubmit} className="space-y-4">
+          {/* SI Location selector — the source of truth for nomenclature.
+              Selecting an SI auto-maps to its linked Spotlight code. */}
+          <div className="space-y-1.5">
+            <Label className="text-xs font-medium">
+              SI Location <span className="text-muted-foreground">(select to auto-map Spotlight code)</span>
+            </Label>
+            <LocationPicker
+              value={siCode}
+              onChange={handleSiSelect}
+              type="SI"
+              placeholder="Search SI location by code, name, city..."
+            />
+            {siCode && recordCode && siCode !== recordCode && (
+              <p className="text-[11px] text-emerald-600 flex items-center gap-1">
+                <Check className="h-3 w-3" />
+                Auto-mapped to Spotlight code: <span className="font-mono font-semibold">{recordCode}</span>
+              </p>
+            )}
+          </div>
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <div className="space-y-1.5 sm:col-span-2">
               <div className="flex items-center justify-between">
@@ -1211,6 +1278,85 @@ function MediaSpendForm({
                 </span>
               </span>
             </div>
+          </div>
+
+          {/* Media Payment / Billing — GST, invoiced, received, TDS */}
+          <div className="rounded-lg border border-emerald-200 bg-emerald-500/5 p-3 space-y-3">
+            <div className="flex items-center gap-2 text-emerald-700">
+              <Receipt className="h-4 w-4" />
+              <span className="text-sm font-semibold">Media Payment &amp; Billing</span>
+              <span className="text-[10px] text-muted-foreground ml-auto">
+                auto-calculated from total utilized
+              </span>
+            </div>
+            <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
+              <div className="space-y-1.5">
+                <Label htmlFor="gstRate" className="text-xs font-medium">
+                  GST Rate (%)
+                </Label>
+                <Input
+                  id="gstRate"
+                  type="number"
+                  step="any"
+                  min="0"
+                  value={gstRate}
+                  onChange={(e) => setGstRate(e.target.value)}
+                  placeholder="18"
+                />
+              </div>
+              <div className="space-y-1.5">
+                <Label htmlFor="receivedAmount" className="text-xs font-medium">
+                  Received Amount (INR)
+                </Label>
+                <Input
+                  id="receivedAmount"
+                  type="number"
+                  step="any"
+                  min="0"
+                  value={receivedAmount}
+                  onChange={(e) => setReceivedAmount(e.target.value)}
+                  placeholder="0"
+                />
+              </div>
+              <div className="space-y-1.5 sm:col-span-1 col-span-2">
+                <Label className="text-xs font-medium text-muted-foreground">
+                  Total Utilized (Meta + Google)
+                </Label>
+                <div className="flex h-9 items-center rounded-md border bg-muted/30 px-3 text-sm font-semibold tabular-nums">
+                  {formatCurrency(totalUtilized)}
+                </div>
+              </div>
+            </div>
+            {/* Auto-calculated summary */}
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 rounded-md bg-emerald-500/10 p-2.5">
+              <div className="text-center">
+                <p className="text-[10px] text-muted-foreground uppercase">GST Amount</p>
+                <p className="text-sm font-bold text-emerald-700 tabular-nums">
+                  {formatCurrency(paymentPreview.gstAmount)}
+                </p>
+              </div>
+              <div className="text-center">
+                <p className="text-[10px] text-muted-foreground uppercase">Invoiced</p>
+                <p className="text-sm font-bold tabular-nums">
+                  {formatCurrency(paymentPreview.invoicedAmount)}
+                </p>
+              </div>
+              <div className="text-center">
+                <p className="text-[10px] text-muted-foreground uppercase">TDS Cut</p>
+                <p className="text-sm font-bold text-amber-600 tabular-nums">
+                  {formatCurrency(paymentPreview.tdsAmount)}
+                </p>
+              </div>
+              <div className="text-center">
+                <p className="text-[10px] text-muted-foreground uppercase">TDS %</p>
+                <p className="text-sm font-bold text-amber-600 tabular-nums">
+                  {paymentPreview.tdsPercentage}%
+                </p>
+              </div>
+            </div>
+            <p className="text-[10px] text-muted-foreground">
+              Invoiced = Utilized + GST. TDS = Invoiced − Received. TDS % = (TDS / Invoiced) × 100.
+            </p>
           </div>
 
           <div className="space-y-1.5">
